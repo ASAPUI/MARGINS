@@ -465,6 +465,7 @@ streamlit
 plotly
 scikit-learn
 pytest
+torch
 ```
 
 Install everything at once:
