@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+
 # 🥇 Monte Carlo Gold Price Predictor
 
 > A production-grade stochastic simulation engine for gold price forecasting and risk analysis.
