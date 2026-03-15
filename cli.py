@@ -1,5 +1,6 @@
 """
 Monte Carlo Gold Price Predictor — Command Line Interface
+coding and created by me of course.
 
 Full-featured CLI for running simulations, backtests,
 and risk analysis from the terminal.
@@ -9,9 +10,9 @@ Usage:
     python cli.py backtest --models gbm ou merton --period 2y
     python cli.py risk     --model heston --days 90
     python cli.py price
-
+    python cli.py (command) --(model or the duration) 
 Author: Essabri Ali Rayan
-Version: 1.0
+Version: 1.2
 """
 
 import argparse

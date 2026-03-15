@@ -426,7 +426,46 @@ def engineer_features(df: pd.DataFrame, price_col: str = 'close') -> pd.DataFram
     """
     engineer = FeatureEngineer(target_col=price_col)
     return engineer.create_all_features(df)
-
+def sequence_builder(feature_matrix: np.ndarray, window: int = 20) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Build sequences for LSTM training from feature matrix.
+    
+    Creates sliding windows of features for LSTM input and corresponding
+    targets (next-step log returns).
+    
+    Args:
+        feature_matrix: Array of shape (N, F) where N is number of timesteps
+                       and F is number of features. First feature (column 0)
+                       should be log returns.
+        window: Size of the lookback window (default 20 trading days)
+        
+    Returns:
+        X: Array of shape (N-window, window, F) - input sequences
+        y: Array of shape (N-window,) - next log-return targets
+        
+    Raises:
+        ValueError: If N <= window or feature_matrix is invalid
+    """
+    if not isinstance(feature_matrix, np.ndarray):
+        feature_matrix = np.array(feature_matrix)
+        
+    if feature_matrix.ndim != 2:
+        raise ValueError(f"feature_matrix must be 2D, got shape {feature_matrix.shape}")
+        
+    N, F = feature_matrix.shape
+    
+    if N <= window:
+        raise ValueError(f"Need more than {window} timesteps, got {N}")
+    
+    X = []
+    y = []
+    
+    for i in range(window, N):
+        X.append(feature_matrix[i-window:i])
+        # Target is the log return at time i (first feature, index 0)
+        y.append(feature_matrix[i, 0])
+    
+    return np.array(X), np.array(y)
 
 if __name__ == "__main__":
     # Example usage

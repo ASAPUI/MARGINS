@@ -95,7 +95,7 @@ class GoldDataFetcher:
             logger.info(f"Fetching gold prices for {symbol}, period={period}, interval={interval}")
             
             ticker = yf.Ticker(symbol)
-            df = ticker.history(period=period, interval=interval, auto_adjust=auto_adjust)
+            df = Ticker.history(period=period, interval=interval, auto_adjust=auto_adjust)
             
             if df.empty:
                 raise ValueError(f"No data returned for {symbol}")

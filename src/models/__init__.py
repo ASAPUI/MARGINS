@@ -37,7 +37,7 @@ from .regime_switching import (
     create_regime_model
 )
 
-__version__ = '1.0.0'
+__version__ = '1.2.0'
 
 __all__ = [
     # GBM
@@ -79,6 +79,8 @@ MODEL_REGISTRY = {
     'heston': (HestonModel, create_heston_model),
     'regime': (RegimeSwitchingModel, create_regime_model),
     'regime_switching': (RegimeSwitchingModel, create_regime_model),
+    'lstm': LSTMModel,  # Added
+
 }
 
 

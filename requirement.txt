@@ -5,3 +5,4 @@ scipy>=1.10.0
 fredapi>=0.5.0
 pyarrow>=10.0.0  # For Parquet support
 tables>=3.8.0    # For HDF5 support
+torch>=2.0.0
