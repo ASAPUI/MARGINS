@@ -297,7 +297,7 @@ pytest tests/test_models.py -v
 
 ## 🗺️ Roadmap
 
-- [ ] Add LSTM/neural network model for comparison
+- [✅] Add LSTM/neural network model for comparison
 - [ ] Integrate FRED API for live macro features
 - [ ] Portfolio mode — simulate multiple assets simultaneously
 - [ ] Add implied volatility surface from gold options data
