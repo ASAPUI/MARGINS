@@ -301,7 +301,6 @@ pytest tests/test_models.py -v
 - [ ] Portfolio mode — simulate multiple assets simultaneously
 - [ ] Add implied volatility surface from gold options data
 - [ ] Deploy dashboard to Streamlit Cloud
-- [ ] Add email/Telegram alerts for price target breaches
 
 ---
 
