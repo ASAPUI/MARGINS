@@ -5,7 +5,7 @@
 
 **Author:** Essabri Ali Rayan  
 **Version:** 1.2.0  
-**License:** MIT
+**License:** BSL
 
 ---
 
