@@ -667,4 +667,3 @@ any customize service you can call:0694025836
 ---
 
 > *"I don't know exactly what will happen, but if I simulate thousands of possible futures and average them, I'll get a very good estimate."* — The Monte Carlo philosophy 🎲
->>>>>>> 314d7320490397ccdbe0674983c6329197befdad
