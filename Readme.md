@@ -308,7 +308,7 @@ pytest tests/test_models.py -v
 
 ## 📄 License
 
-MIT License — free to use, modify, and distribute.
+BSL LICENS-- not for commercial use
 
 ---
 
