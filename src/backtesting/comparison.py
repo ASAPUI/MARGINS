@@ -3,6 +3,8 @@ Model Comparison and Ranking System
 
 Compares multiple stochastic models across various performance metrics.
 Generates leaderboards and statistical significance tests.
+Author : Essabri Ali Rayan
+Version : 1.3
 """
 
 import numpy as np

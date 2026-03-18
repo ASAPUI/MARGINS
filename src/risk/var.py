@@ -3,6 +3,8 @@ Value at Risk (VaR) and Conditional Value at Risk (CVaR) Module
 
 Calculates risk metrics from Monte Carlo simulation paths.
 Optimized with Numba JIT compilation for performance.
+author:Essabri Ali Rayan
+version:1.3
 """
 
 import numpy as np

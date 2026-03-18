@@ -2,6 +2,8 @@
 """
 Data structures for WorldMonitor macro signals.
 Pydantic-validated dataclasses for type safety and serialization.
+author : Essabri Ali Rayan
+Version: 1.3
 """
 
 from dataclasses import dataclass, field

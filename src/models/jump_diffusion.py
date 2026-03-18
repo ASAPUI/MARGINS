@@ -7,7 +7,7 @@ Useful for modeling tail risk and crisis scenarios in gold prices.
 Formula: dS = mu*S*dt + sigma*S*dW + J*S*dN
 
 Author: Essabri Ali rayan
-Version: 1.0
+Version: 1.3
 """
 
 import numpy as np

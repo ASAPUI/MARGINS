@@ -5,7 +5,7 @@ LSTM Neural Network model for gold price forecasting.
 Implements the same interface as GBM, OU, Merton, Heston, and Regime models.
 
 Author: Essabri Ali Rayan (@ASAPUI)
-Version: 2.0.0
+Version: 1.3
 Date: March 2026
 """
 

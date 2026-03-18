@@ -25,6 +25,8 @@ Usage:
     # Cache results
     storage = DataStorage()
     storage.save_dataframe(features, 'gold_features_v1')
+author:Essabri Ali Rayan
+Version :1.3
 """
 
 from fetcher import GoldDataFetcher, fetch_gold_data_simple

@@ -2,6 +2,8 @@
 """
 ParameterAdjuster: Translate WorldMonitor signals into model parameters.
 Implements the adjustment formulas from the integration specification.
+author:Essabri Ali Rayan
+Version :1.3
 """
 
 from dataclasses import dataclass

@@ -1,0 +1,7 @@
+the update: 1.3
+------macro_data------
+python cli.py simulate --model merton --days 30 --macro
+python cli.py simulate --model merton --days 30 --macro --macro-brief
+python cli.py risk --model ou --days 60 --macro
+-----most_used_by_me:)-------
+python cli.py simulate --model ou --days 30 --paths 5000

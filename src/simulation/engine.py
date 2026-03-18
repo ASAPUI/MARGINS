@@ -5,7 +5,7 @@ The main simulation runner that coordinates all stochastic models.
 Provides high-performance Monte Carlo simulation with Numba optimization.
 
 Author: Essabri ali rayan
-Version: 1.0
+Version: 1.3
 """
 
 import numpy as np

@@ -18,6 +18,8 @@ Usage:
     # Risk metrics
     metrics_calc = RiskMetricsCalculator()
     metrics = metrics_calc.calculate_all_metrics(returns, prices)
+author:Essabri Ali Rayan
+Version : 1.3
 """
 
 from .var import (

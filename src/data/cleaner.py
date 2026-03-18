@@ -9,7 +9,7 @@ Handles data quality issues including:
 - Time series alignment
 
 Author: Essabri ali rayan
-Version: 1.0
+Version: 1.3
 """
 
 import pandas as pd

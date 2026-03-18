@@ -5,7 +5,7 @@ Transforms raw price data into model-ready features for Monte Carlo simulation.
 Creates technical indicators, regime features, and macro factors.
 
 Author: Essabri ali rayan
-Version: 1.0
+Version: 1.3
 """
 
 import pandas as pd

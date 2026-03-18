@@ -7,7 +7,7 @@ Captures gold's tendency to revert to long-term equilibrium.
 Formula: dS = kappa * (theta - S) * dt + sigma * dW
 
 Author: Essabri Ali rayan
-Version: 1.0
+Version: 1.3
 """
 
 import numpy as np

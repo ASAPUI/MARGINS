@@ -3,6 +3,8 @@ Performance Metrics and Statistics Module
 
 Calculates backtesting metrics, accuracy measures, and performance ratios
 for Monte Carlo gold price predictions.
+author:Essabri Ali Rayan
+Version:1.3
 """
 
 import numpy as np

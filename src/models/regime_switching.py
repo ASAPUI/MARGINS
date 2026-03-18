@@ -5,7 +5,7 @@ Models different market states (calm vs crisis) with distinct parameters.
 Captures structural changes in gold market behavior.
 
 Author: Essabri ali rayan
-Version: 1.0
+Version: 1.3
 """
 
 import numpy as np

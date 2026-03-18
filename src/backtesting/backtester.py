@@ -3,6 +3,8 @@ Walk-Forward Backtesting Engine
 
 Rigorous backtesting methodology ensuring no lookahead bias.
 Uses rolling windows for training and out-of-sample testing.
+Author : Essabri Ali Rayan
+Version : 1.3
 """
 
 import numpy as np

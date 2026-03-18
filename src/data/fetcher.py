@@ -7,7 +7,7 @@ Fetches gold prices and macroeconomic data from multiple sources:
 - World Gold Council (supply/demand data)
 
 Author: Essabri ali rayan
-Version: 1.0
+Version: 1.3
 """
 
 import yfinance as yf

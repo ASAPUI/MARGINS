@@ -12,7 +12,7 @@ Usage:
     python cli.py price
     python cli.py (command) --(model or the duration) 
 Author: Essabri Ali Rayan
-Version: 1.2
+Version: 1.3
 """
 
 import argparse
@@ -38,7 +38,6 @@ class C:
     WHITE  = "\033[38;5;255m"
 
 def _no_color():
-    """Disable colors if not in a terminal."""
     for attr in vars(C):
         if not attr.startswith("_"):
             setattr(C, attr, "")
@@ -50,7 +49,7 @@ if not sys.stdout.isatty():
 # ── Banner ─────────────────────────────────────────────────────────────────────
 BANNER = f"""
 {C.GOLD}╔══════════════════════════════════════════════════════╗
-║      Monte Carlo Gold Price Predictor  v1.0          ║
+║      Monte Carlo Gold Price Predictor  v1.3          ║
 ║      Essabri Ali Rayan                               ║
 ╚══════════════════════════════════════════════════════╝{C.RESET}
 """
@@ -96,9 +95,22 @@ def progress_bar(current: int, total: int, width: int = 40, label: str = ""):
     print(f"\r  {bar} {pct}  {C.MUTED}{label}{C.RESET}", end="", flush=True)
 
 
+# ── Macro intelligence (optional) ─────────────────────────────────────────────
+# BUG FIX 1: click and src.macro imports were scattered mid-file outside any
+# function, mixed with argparse code. Moved here at top level with try/except
+# so the CLI works even without the macro module installed.
+try:
+    from src.macro.bridge import MacroBridge
+    from src.macro.adjuster import ParameterAdjuster
+    HAS_MACRO = True
+except ImportError:
+    HAS_MACRO = False
+    MacroBridge = None
+    ParameterAdjuster = None
+
+
 # ── Data Layer ─────────────────────────────────────────────────────────────────
 def fetch_prices(period: str = "2y", symbol: str = "GC=F") -> pd.Series:
-    """Fetch gold prices from Yahoo Finance with synthetic fallback."""
     try:
         import yfinance as yf
         df = yf.Ticker(symbol).history(period=period, interval="1d", auto_adjust=True)
@@ -129,11 +141,11 @@ def get_current_price(symbol: str = "GC=F") -> float:
 
 # ── Model Factory ──────────────────────────────────────────────────────────────
 MODEL_MAP = {
-    "gbm":     ("src.models.gbm",            "GeometricBrownianMotion"),
-    "ou":      ("src.models.mean_reversion",  "OrnsteinUhlenbeckModel"),
-    "merton":  ("src.models.jump_diffusion",  "MertonJumpModel"),
-    "heston":  ("src.models.heston",          "HestonModel"),
-    "regime":  ("src.models.regime_switching","RegimeSwitchingModel"),
+    "gbm":     ("src.models.gbm",             "GeometricBrownianMotion"),
+    "ou":      ("src.models.mean_reversion",   "OrnsteinUhlenbeckModel"),
+    "merton":  ("src.models.jump_diffusion",   "MertonJumpModel"),
+    "heston":  ("src.models.heston",           "HestonModel"),
+    "regime":  ("src.models.regime_switching", "RegimeSwitchingModel"),
 }
 
 MODEL_LABELS = {
@@ -146,7 +158,6 @@ MODEL_LABELS = {
 
 
 class FallbackGBM:
-    """Minimal GBM used when src/ not available."""
     name = "GBM"
 
     def __init__(self):
@@ -174,7 +185,6 @@ class FallbackGBM:
 
 
 def load_model(key: str):
-    """Import model class from src/ or fall back gracefully."""
     if key not in MODEL_MAP:
         print(f"  {C.RED}✗ Unknown model '{key}'. Choose: {', '.join(MODEL_MAP)}{C.RESET}")
         sys.exit(1)
@@ -189,22 +199,18 @@ def load_model(key: str):
 
 
 def build_and_calibrate(key: str, prices: pd.Series):
-    """Instantiate + calibrate a model."""
     ModelCls = load_model(key)
     model    = ModelCls()
-
     log_returns = np.log(prices / prices.shift(1)).dropna().values
-
     if hasattr(model, "calibrate"):
         if key in ("ou", "heston", "regime"):
             model.calibrate(prices.values)
         else:
             model.calibrate(log_returns)
-
     return model
 
 
-# ── Risk Calculations ─────────────────────────────────────────────────────────
+# ── Risk Calculations ──────────────────────────────────────────────────────────
 def compute_risk(paths: np.ndarray, S0: float) -> dict:
     final = paths[:, -1]
     log_r = np.log(final / S0)
@@ -241,12 +247,89 @@ def compute_risk(paths: np.ndarray, S0: float) -> dict:
     }
 
 
+# ── Macro helpers ──────────────────────────────────────────────────────────────
+def _apply_macro(args, model_key: str, model_obj, prices: pd.Series):
+    """
+    BUG FIX 2: The original simulate() block used click.pass_context and
+    ctx.obj to pass macro state — but the CLI uses argparse, not click.
+    Replaced with a plain function that reads from args directly.
+
+    Returns (adjusted_params, macro_signals_dict) or (None, None).
+    """
+    if not getattr(args, "macro", False) or not HAS_MACRO:
+        return None, None
+
+    print(f"\n  {C.CYAN}↯ Fetching WorldMonitor macro signals...{C.RESET}")
+    bridge  = MacroBridge()
+    signals = bridge.get_signals_sync()
+
+    if getattr(args, "macro_brief", False):
+        # BUG FIX 3: original code called bridge.get_brief() (async coroutine)
+        # without await — replaced with get_brief_sync()
+        brief = bridge.get_brief_sync()
+        if brief:
+            print(f"\n  {C.GOLD}🌍 World Brief:{C.RESET}")
+            print(f"  {'─'*50}")
+            for line in brief.split(". "):
+                if line.strip():
+                    print(f"  {C.MUTED}{line.strip()}.{C.RESET}")
+            print(f"  {'─'*50}\n")
+
+    if not signals.is_fallback:
+        print(f"  {C.GREEN}✓{C.RESET} Macro: {C.BOLD}{signals.risk_tier.value.upper()}{C.RESET} "
+              f"risk  |  CII avg {signals.cii_top5_avg:.1f}  |  "
+              f"hotspots {signals.active_hotspot_count}")
+
+    adjuster = ParameterAdjuster(signals)
+
+    # BUG FIX 4: original code accessed model_obj.mu, model_obj.lambda_jump etc.
+    # directly — but these live under model_obj.params.* for the real model classes.
+    # Use getattr with fallback so both real models and FallbackGBM work.
+    def _p(attr, default=0.05):
+        # Check params dataclass first, then direct attribute
+        params = getattr(model_obj, "params", None)
+        if params and hasattr(params, attr):
+            return getattr(params, attr)
+        return getattr(model_obj, attr, default)
+
+    try:
+        if model_key == "gbm":
+            adj = adjuster.adjust_gbm(_p("mu"), _p("sigma"))
+        elif model_key == "ou":
+            adj = adjuster.adjust_ou(_p("mu"), _p("sigma"),
+                                     _p("theta", 2000.0), _p("kappa", 0.5))
+        elif model_key == "merton":
+            adj = adjuster.adjust_merton(
+                _p("mu"), _p("sigma"),
+                _p("lambda_jump", 2.0), _p("mu_jump", -0.05), _p("sigma_jump", 0.10)
+            )
+        elif model_key == "heston":
+            adj = adjuster.adjust_heston(
+                _p("mu"), _p("v0", 0.04),
+                _p("theta_v", 0.04), _p("kappa_v", 1.5),
+                _p("xi", 0.3), _p("rho", -0.7)
+            )
+        elif model_key == "regime":
+            mu_list    = _p("mu",    [0.05, -0.05])
+            sigma_list = _p("sigma", [0.12,  0.25])
+            adj = adjuster.adjust_regime(
+                mu_list[0], sigma_list[0],
+                mu_list[1], sigma_list[1],
+            )
+        else:
+            adj = None
+    except Exception as e:
+        print(f"  {C.MUTED}⚠ Macro adjustment failed ({e}), running without macro{C.RESET}")
+        adj = None
+
+    return adj, signals.to_dict() if not signals.is_fallback else None
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # COMMANDS
 # ══════════════════════════════════════════════════════════════════════════════
 
 def cmd_price(args):
-    """Fetch and display current gold price."""
     print_section("Current Gold Price")
     try:
         import yfinance as yf
@@ -257,44 +340,60 @@ def cmd_price(args):
         pct     = change / prev * 100
         vol_1d  = float(data["Close"].pct_change().std() * 100)
 
-        print_metric("Symbol",        "GC=F  (COMEX Gold Futures)")
-        print_metric("Current Price", f"${price:,.2f}",
+        print_metric("Symbol",           "GC=F  (COMEX Gold Futures)")
+        print_metric("Current Price",    f"${price:,.2f}",
                      f"{'+' if change >= 0 else ''}{change:.2f} ({pct:+.2f}%)")
-        print_metric("Previous Close",f"${prev:,.2f}")
+        print_metric("Per Gram",         f"${price/31.1035:,.2f}")
+        print_metric("Per Kilogram",     f"${price*32.1507:,.0f}")
+        print_metric("Previous Close",   f"${prev:,.2f}")
         print_metric("5-Day Volatility", f"{vol_1d:.2f}%")
-        print_metric("Last Updated",  datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        print_metric("Last Updated",     datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     except Exception as e:
         print(f"  {C.RED}Error fetching price: {e}{C.RESET}")
 
 
 def cmd_simulate(args):
-    """Run Monte Carlo simulation and display results."""
     print_section(f"Simulation  —  {MODEL_LABELS.get(args.model, args.model)}")
 
-    # ── Fetch data ─────────────────────────────────────────────────────────────
     prices = fetch_prices(args.period)
     S0     = get_current_price() if not args.price else args.price
 
-    print_metric("Initial Price",    f"${S0:,.2f}")
-    print_metric("Model",            MODEL_LABELS.get(args.model, args.model))
-    print_metric("Horizon",          f"{args.days} trading days")
-    print_metric("Paths",            f"{args.paths:,}")
-    print_metric("Training Period",  args.period)
+    print_metric("Initial Price",   f"${S0:,.2f}")
+    print_metric("Model",           MODEL_LABELS.get(args.model, args.model))
+    print_metric("Horizon",         f"{args.days} trading days")
+    print_metric("Paths",           f"{args.paths:,}")
+    print_metric("Training Period", args.period)
     print()
 
-    # ── Calibrate ──────────────────────────────────────────────────────────────
     print(f"  {C.MUTED}Calibrating model...{C.RESET}")
     model = build_and_calibrate(args.model, prices)
 
-    # ── Simulate ───────────────────────────────────────────────────────────────
-    print(f"  {C.MUTED}Running {args.paths:,} simulations...{C.RESET}")
-    seed  = args.seed if args.seed >= 0 else None
-    paths = model.simulate(
-        S0=S0, n_steps=args.days + 1,
-        n_paths=args.paths, random_seed=seed,
-    )
+    # Macro adjustment
+    adj, macro_dict = _apply_macro(args, args.model, model, prices)
 
-    # ── Results ────────────────────────────────────────────────────────────────
+    print(f"  {C.MUTED}Running {args.paths:,} simulations...{C.RESET}")
+    seed = args.seed if args.seed >= 0 else None
+
+    # BUG FIX 5: simulate_with_macro expects ModelParameters from adjuster,
+    # not the adjuster's output dict. Pass adj directly if the method exists.
+    if adj is not None and hasattr(model, "simulate_with_macro"):
+        from src.models.gbm import ModelParameters
+        mp = ModelParameters(
+            mu_adjusted    = adj.mu_adjusted,
+            sigma_adjusted = adj.sigma_adjusted,
+            lambda_boost   = (adj.lambda_adjusted / adj.lambda_base)
+                              if adj.lambda_base and adj.lambda_base > 0 else 1.0,
+        )
+        paths = model.simulate_with_macro(
+            S0=S0, n_steps=args.days + 1,
+            n_paths=args.paths, macro_params=mp, random_seed=seed,
+        )
+    else:
+        paths = model.simulate(
+            S0=S0, n_steps=args.days + 1,
+            n_paths=args.paths, random_seed=seed,
+        )
+
     r = compute_risk(paths, S0)
     final = paths[:, -1]
 
@@ -311,29 +410,40 @@ def cmd_simulate(args):
     print_metric("Prob. Loss > 10%", f"{r['prob_loss_10']*100:.1f}%")
     print()
 
-    # Scenario table
+    if adj is not None:
+        print_section("Macro Adjustments Applied")
+        print_metric("Drift adjustment",  f"{(adj.mu_adjusted - adj.mu_base)*100:+.4f}%")
+        print_metric("Vol multiplier",
+                     f"{adj.sigma_adjusted/adj.sigma_base:.3f}x"
+                     if adj.sigma_base > 0 else "n/a")
+        print_metric("Crisis probability", f"{adj.p_crisis*100:.1f}%")
+
     scenarios = pd.DataFrame({
-        "Scenario":    ["Bear (5%)", "Mild Bear (25%)", "Base (50%)", "Mild Bull (75%)", "Bull (95%)"],
-        "Price ($)":   [f"{r['p5']:,.0f}", f"{r['p25']:,.0f}", f"{r['median']:,.0f}",
-                        f"{r['p75']:,.0f}", f"{r['p95']:,.0f}"],
-        "Change":      [f"{(r['p5']/S0-1)*100:+.1f}%",  f"{(r['p25']/S0-1)*100:+.1f}%",
-                        f"{(r['median']/S0-1)*100:+.1f}%", f"{(r['p75']/S0-1)*100:+.1f}%",
-                        f"{(r['p95']/S0-1)*100:+.1f}%"],
+        "Scenario":  ["Bear (5%)", "Mild Bear (25%)", "Base (50%)",
+                      "Mild Bull (75%)", "Bull (95%)"],
+        "Price ($)": [f"{r['p5']:,.0f}", f"{r['p25']:,.0f}", f"{r['median']:,.0f}",
+                      f"{r['p75']:,.0f}", f"{r['p95']:,.0f}"],
+        "Change":    [f"{(r['p5']/S0-1)*100:+.1f}%",  f"{(r['p25']/S0-1)*100:+.1f}%",
+                      f"{(r['median']/S0-1)*100:+.1f}%", f"{(r['p75']/S0-1)*100:+.1f}%",
+                      f"{(r['p95']/S0-1)*100:+.1f}%"],
     })
     print_table(scenarios, "Scenario Analysis")
 
-    # ── Export ─────────────────────────────────────────────────────────────────
     if args.output:
-        _export_results(args.output, {
+        out = {
             "model": args.model, "S0": S0, "days": args.days,
             "paths": args.paths, "results": r,
             "timestamp": datetime.now().isoformat(),
-        })
+        }
+        if macro_dict:
+            out["macro_signals"] = macro_dict
+        if adj:
+            out["parameter_adjustments"] = adj.to_dict()
+        _export_results(args.output, out)
         print(f"\n  {C.GREEN}✓ Results saved to {args.output}{C.RESET}")
 
 
 def cmd_risk(args):
-    """Deep risk analysis for a single model."""
     print_section(f"Risk Analysis  —  {MODEL_LABELS.get(args.model, args.model)}")
 
     prices = fetch_prices(args.period)
@@ -341,6 +451,7 @@ def cmd_risk(args):
 
     print(f"  {C.MUTED}Calibrating & simulating...{C.RESET}")
     model = build_and_calibrate(args.model, prices)
+    adj, _ = _apply_macro(args, args.model, model, prices)
     seed  = args.seed if args.seed >= 0 else None
     paths = model.simulate(S0=S0, n_steps=args.days + 1,
                            n_paths=args.paths, random_seed=seed)
@@ -381,7 +492,6 @@ def cmd_risk(args):
 
 
 def cmd_backtest(args):
-    """Walk-forward backtest across one or more models."""
     print_section("Walk-Forward Backtest")
 
     prices = fetch_prices(args.period)
@@ -399,10 +509,10 @@ def cmd_backtest(args):
         label = MODEL_LABELS.get(model_key, model_key)
         print(f"\n  {C.GOLD}▸ Backtesting {label}...{C.RESET}")
 
-        n         = len(prices)
-        start     = args.train_window
-        step      = args.test_window
-        windows   = []
+        n       = len(prices)
+        start   = args.train_window
+        step    = args.test_window
+        windows = []
 
         while start + args.test_window <= n:
             windows.append((
@@ -420,54 +530,45 @@ def cmd_backtest(args):
             test_prices  = prices.iloc[test_sl]
 
             try:
-                model = build_and_calibrate(model_key, train_prices)
-                S0_w  = float(train_prices.iloc[-1])
-                n_d   = len(test_prices)
-                paths = model.simulate(S0=S0_w, n_steps=n_d + 1,
-                                       n_paths=args.paths, random_seed=42)
-                preds   = np.mean(paths[:, 1:], axis=0)
+                model   = build_and_calibrate(model_key, train_prices)
+                S0_w    = float(train_prices.iloc[-1])
+                n_d     = len(test_prices)
+                paths_w = model.simulate(S0=S0_w, n_steps=n_d + 1,
+                                         n_paths=args.paths, random_seed=42)
+                preds   = np.mean(paths_w[:, 1:], axis=0)
                 actuals = test_prices.values
-
                 errors  = preds - actuals
                 mask    = actuals != 0
                 mape    = np.mean(np.abs(errors[mask] / actuals[mask])) * 100
-
-                if len(preds) > 1:
-                    dir_acc = np.mean((np.diff(preds) > 0) == (np.diff(actuals) > 0)) * 100
-                else:
-                    dir_acc = 50.0
-
+                dir_acc = np.mean((np.diff(preds) > 0) == (np.diff(actuals) > 0)) * 100 \
+                          if len(preds) > 1 else 50.0
                 window_metrics.append({
                     "rmse": float(np.sqrt(np.mean(errors**2))),
                     "mae":  float(np.mean(np.abs(errors))),
                     "mape": float(mape),
                     "dir_accuracy": float(dir_acc),
                 })
-            except Exception as e:
+            except Exception:
                 pass
 
-        print()  # newline after progress bar
+        print()
 
         if window_metrics:
             agg = {k: np.mean([m[k] for m in window_metrics]) for k in window_metrics[0]}
             all_results[label] = agg
 
-    # ── Results Table ──────────────────────────────────────────────────────────
     print_section("Backtest Results")
     if all_results:
         rows = []
         for model_label, metrics in all_results.items():
             rows.append({
-                "Model":    model_label,
-                "RMSE":     f"${metrics['rmse']:,.1f}",
-                "MAE":      f"${metrics['mae']:,.1f}",
-                "MAPE":     f"{metrics['mape']:.2f}%",
-                "Dir Acc":  f"{metrics['dir_accuracy']:.1f}%",
+                "Model":   model_label,
+                "RMSE":    f"${metrics['rmse']:,.1f}",
+                "MAE":     f"${metrics['mae']:,.1f}",
+                "MAPE":    f"{metrics['mape']:.2f}%",
+                "Dir Acc": f"{metrics['dir_accuracy']:.1f}%",
             })
-        df = pd.DataFrame(rows)
-        print_table(df)
-
-        # Best model
+        print_table(pd.DataFrame(rows))
         best = min(all_results.items(), key=lambda x: x[1]["mape"])
         print(f"\n  {C.GREEN}★ Best model by MAPE: {C.BOLD}{best[0]}{C.RESET}  "
               f"{C.MUTED}({best[1]['mape']:.2f}% avg error){C.RESET}")
@@ -487,7 +588,6 @@ def cmd_backtest(args):
 
 
 def cmd_compare(args):
-    """Compare all models on same data and print leaderboard."""
     print_section("Model Comparison")
 
     prices = fetch_prices(args.period)
@@ -502,25 +602,22 @@ def cmd_compare(args):
             model = build_and_calibrate(key, prices)
             paths = model.simulate(S0=S0, n_steps=args.days + 1,
                                    n_paths=args.paths, random_seed=seed)
-            r = compute_risk(paths, S0)
-            results[label] = r
+            results[label] = compute_risk(paths, S0)
         except Exception as e:
             print(f"  {C.RED}✗ {label}: {e}{C.RESET}")
 
     print_section("Leaderboard")
-
     rows = []
     for label, r in results.items():
         rows.append({
-            "Model":       label,
-            "Expected $":  f"{r['mean']:,.0f}",
-            "Change":      f"{(r['mean']/S0-1)*100:+.1f}%",
-            "Vol %":       f"{r['vol']:.1f}",
-            "VaR 95%":     f"{(r['var_95']/S0-1)*100:+.1f}%",
-            "P(Gain)":     f"{r['prob_up']*100:.0f}%",
+            "Model":      label,
+            "Expected $": f"{r['mean']:,.0f}",
+            "Change":     f"{(r['mean']/S0-1)*100:+.1f}%",
+            "Vol %":      f"{r['vol']:.1f}",
+            "VaR 95%":    f"{(r['var_95']/S0-1)*100:+.1f}%",
+            "P(Gain)":    f"{r['prob_up']*100:.0f}%",
         })
-    df = pd.DataFrame(rows)
-    print_table(df)
+    print_table(pd.DataFrame(rows))
 
     if args.output:
         _export_results(args.output, {k: v for k, v in results.items()})
@@ -538,7 +635,6 @@ def _export_results(path: str, data: dict):
                 for k, v in data.items()}
         pd.DataFrame(flat).to_csv(path, index=False)
     else:
-        # Default: JSON
         with open(path, "w") as f:
             json.dump(data, f, indent=2, default=str)
 
@@ -555,7 +651,8 @@ def build_parser() -> argparse.ArgumentParser:
 Examples:
   python cli.py price
   python cli.py simulate --model ou --days 30 --paths 5000
-  python cli.py simulate --model heston --days 90 --output results.json
+  python cli.py simulate --model merton --days 30 --macro
+  python cli.py simulate --model merton --days 30 --macro --macro-brief
   python cli.py risk --model merton --days 60 --target 2600
   python cli.py backtest --models gbm ou merton --period 2y
   python cli.py compare --days 30 --output comparison.csv
@@ -563,137 +660,7 @@ Examples:
 Models: gbm | ou | merton | heston | regime
         """,
     )
-import click
-from src.macro import MacroBridge, ParameterAdjuster
 
-# Add to main CLI group
-@click.option('--macro/--no-macro', default=None, 
-              help='Enable/disable WorldMonitor macro intelligence')
-@click.option('--macro-brief', is_flag=True,
-              help='Fetch and display AI world brief')
-@click.pass_context
-def cli(ctx, macro, macro_brief):
-    """Gold Option Monte Carlo Simulator with optional Macro Intelligence."""
-    ctx.ensure_object(dict)
-    
-    # Determine macro mode
-    ctx.obj['macro_enabled'] = macro if macro is not None else \
-        os.getenv('WORLDMONITOR_ENABLED', 'true').lower() == 'true'
-    ctx.obj['macro_brief'] = macro_brief
-    
-    if ctx.obj['macro_enabled']:
-        ctx.obj['macro_bridge'] = MacroBridge()
-
-
-# Modify simulate command
-@cli.command()
-@click.pass_context
-@click.option('--model', '-m', default='gbm', 
-              type=click.Choice(['gbm', 'ou', 'merton', 'heston', 'regime']))
-@click.option('--days', '-d', default=30, help='Trading days to simulate')
-@click.option('--paths', '-p', default=5000, help='Number of simulation paths')
-@click.option('--output', '-o', type=click.Path(), help='Output file (JSON/CSV)')
-def simulate(ctx, model, days, paths, output):
-    """Run Monte Carlo simulation with optional macro adjustments."""
-    
-    # Fetch gold data and calibrate model (existing logic)
-    fetcher = GoldDataFetcher()
-    prices = fetcher.fetch_gold_prices()
-    
-    # Create base model
-    model_obj = create_model(model, historical_data=prices['close'].values)
-    
-    # Macro integration
-    macro_signals = None
-    adjusted_params = None
-    
-    if ctx.obj.get('macro_enabled'):
-        bridge = ctx.obj['macro_bridge']
-        signals = bridge.get_signals_sync()
-        
-        if ctx.obj.get('macro_brief'):
-            brief = bridge.get_brief()
-            if brief:
-                click.echo(f"\n🌍 World Brief:\n{'-'*40}\n{brief}\n{'-'*40}\n")
-        
-        # Apply adjustments based on model type
-        adjuster = ParameterAdjuster(signals)
-        current_price = prices['close'].iloc[-1]
-        
-        if model == 'gbm':
-            adjusted_params = adjuster.adjust_gbm(model_obj.mu, model_obj.sigma)
-        elif model == 'ou':
-            adjusted_params = adjuster.adjust_ou(
-                model_obj.mu, model_obj.sigma, 
-                model_obj.theta, model_obj.kappa
-            )
-        elif model == 'merton':
-            adjusted_params = adjuster.adjust_merton(
-                model_obj.mu, model_obj.sigma,
-                model_obj.lambda_jump, model_obj.mu_j, model_obj.sigma_j
-            )
-        elif model == 'heston':
-            adjusted_params = adjuster.adjust_heston(
-                model_obj.mu, model_obj.v0,
-                model_obj.theta_v, model_obj.kappa_v,
-                model_obj.xi, model_obj.rho
-            )
-        elif model == 'regime':
-            adjusted_params = adjuster.adjust_regime(
-                model_obj.mu[0], model_obj.sigma[0],  # calm
-                model_obj.mu[1], model_obj.sigma[1],  # crisis
-            )
-        
-        macro_signals = signals.to_dict()
-        
-        # Display adjustments
-        if not signals.is_fallback:
-            click.echo(f"📊 Macro Signal: {signals.risk_tier.value.upper()} risk tier")
-            click.echo(f"   CII Top-5 Avg: {signals.cii_top5_avg:.1f}")
-            click.echo(f"   Active Hotspots: {signals.active_hotspot_count}")
-    
-    # Run simulation with adjusted params
-    if hasattr(model_obj, 'simulate_with_macro') and adjusted_params:
-        results = model_obj.simulate_with_macro(
-            S0=current_price,
-            n_steps=days,
-            n_paths=paths,
-            macro_params=adjusted_params
-        )
-    else:
-        results = model_obj.simulate(
-            S0=current_price,
-            n_steps=days,
-            n_paths=paths
-        )
-    
-    # Output results
-    output_data = {
-        'model': model,
-        'days': days,
-        'paths': paths,
-        'current_price': float(current_price),
-        'final_prices': results[:, -1].tolist(),
-        'statistics': {
-            'mean': float(np.mean(results[:, -1])),
-            'std': float(np.std(results[:, -1])),
-            'var_95': float(np.percentile(results[:, -1], 5)),
-            'var_5': float(np.percentile(results[:, -1], 95)),
-        }
-    }
-    
-    if macro_signals:
-        output_data['macro_signals'] = macro_signals
-    if adjusted_params:
-        output_data['parameter_adjustments'] = adjusted_params.to_dict()
-    
-    if output:
-        with open(output, 'w') as f:
-            json.dump(output_data, f, indent=2)
-        click.echo(f"Results saved to {output}")
-    else:
-        click.echo(json.dumps(output_data, indent=2))
-    # ── Global options ─────────────────────────────────────────────────────────
     parser.add_argument("--no-color", action="store_true",
                         help="Disable colored output")
 
@@ -704,20 +671,17 @@ def simulate(ctx, model, days, paths, output):
 
     # ── simulate ───────────────────────────────────────────────────────────────
     sim = subparsers.add_parser("simulate", help="Run Monte Carlo simulation")
-    sim.add_argument("--model",  "-m", default="ou",   choices=list(MODEL_MAP),
-                     help="Stochastic model (default: ou)")
-    sim.add_argument("--days",   "-d", type=int, default=30,
-                     help="Forecast horizon in trading days (default: 30)")
-    sim.add_argument("--paths",  "-p", type=int, default=5000,
-                     help="Number of simulation paths (default: 5000)")
-    sim.add_argument("--period", default="2y",
-                     help="Training data period (default: 2y)")
-    sim.add_argument("--price",  type=float, default=None,
-                     help="Override current gold price")
-    sim.add_argument("--seed",   type=int, default=42,
-                     help="Random seed (-1 for random, default: 42)")
-    sim.add_argument("--output", "-o", default=None,
-                     help="Save results to file (JSON or CSV)")
+    sim.add_argument("--model",       "-m", default="ou", choices=list(MODEL_MAP))
+    sim.add_argument("--days",        "-d", type=int, default=30)
+    sim.add_argument("--paths",       "-p", type=int, default=5000)
+    sim.add_argument("--period",      default="2y")
+    sim.add_argument("--price",       type=float, default=None)
+    sim.add_argument("--seed",        type=int, default=42)
+    sim.add_argument("--output",      "-o", default=None)
+    sim.add_argument("--macro",       action="store_true",
+                     help="Enable WorldMonitor macro intelligence")
+    sim.add_argument("--macro-brief", action="store_true",
+                     help="Fetch and display AI world brief")
 
     # ── risk ───────────────────────────────────────────────────────────────────
     risk = subparsers.add_parser("risk", help="Deep risk analysis")
@@ -726,24 +690,20 @@ def simulate(ctx, model, days, paths, output):
     risk.add_argument("--paths",  "-p", type=int, default=5000)
     risk.add_argument("--period", default="2y")
     risk.add_argument("--price",  type=float, default=None)
-    risk.add_argument("--target", type=float, default=None,
-                     help="Calculate probability of reaching this price target")
+    risk.add_argument("--target", type=float, default=None)
     risk.add_argument("--seed",   type=int, default=42)
     risk.add_argument("--output", "-o", default=None)
+    risk.add_argument("--macro",  action="store_true")
 
     # ── backtest ───────────────────────────────────────────────────────────────
     bt = subparsers.add_parser("backtest", help="Walk-forward backtest")
-    bt.add_argument("--models",   "-m", nargs="+", choices=list(MODEL_MAP),
-                    default=["gbm", "ou"],
-                    help="Models to test (default: gbm ou)")
-    bt.add_argument("--period",   default="5y",
-                    help="Historical data period (default: 5y)")
-    bt.add_argument("--train-window", type=int, default=252,
-                    help="Training window in days (default: 252)")
-    bt.add_argument("--test-window",  type=int, default=30,
-                    help="Test window in days (default: 30)")
-    bt.add_argument("--paths",    "-p", type=int, default=1000)
-    bt.add_argument("--output",   "-o", default=None)
+    bt.add_argument("--models",       "-m", nargs="+", choices=list(MODEL_MAP),
+                    default=["gbm", "ou"])
+    bt.add_argument("--period",       default="5y")
+    bt.add_argument("--train-window", type=int, default=252)
+    bt.add_argument("--test-window",  type=int, default=30)
+    bt.add_argument("--paths",        "-p", type=int, default=1000)
+    bt.add_argument("--output",       "-o", default=None)
 
     # ── compare ────────────────────────────────────────────────────────────────
     cmp = subparsers.add_parser("compare", help="Compare all models side-by-side")

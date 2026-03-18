@@ -21,6 +21,8 @@ Usage:
 
     model = create_model('ou', historical_data=prices)
     paths = model.simulate(S0=2000, n_steps=30, n_paths=1000)
+Author: Essabri Ali Rayan
+Version : 1.3
 """
 import numpy as np
 from typing import Optional

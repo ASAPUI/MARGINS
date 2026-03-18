@@ -2,6 +2,8 @@
 """
 Macro intelligence integration for gold-option.
 Connects WorldMonitor API live signals to stochastic model parameters.
+Author:Essabri Ali Rayan
+Version : 1.3
 """
 
 from .bridge import MacroBridge, MacroSignal

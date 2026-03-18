@@ -8,7 +8,7 @@ Combines results from multiple stochastic models using various aggregation metho
 - Ensemble methods
 
 Author: Essabri ali rayan
-Version: 1.0
+Version: 1.3
 """
 
 import numpy as np

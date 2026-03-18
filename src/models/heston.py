@@ -11,7 +11,7 @@ dv = kappa * (theta - v) * dt + xi * sqrt(v) * dW2
 corr(dW1, dW2) = rho
 
 Author: Essabri ali rayan
-Version: 1.0
+Version: 1.3
 """
 
 import numpy as np

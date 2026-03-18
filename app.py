@@ -5,7 +5,7 @@ A production-grade interactive dashboard for gold price simulation
 using multiple stochastic models.
 
 Author: Essabri Ali Rayan
-Version: 1.2
+Version: 1.3
 """
 
 import streamlit as st

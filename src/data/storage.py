@@ -10,7 +10,7 @@ Provides efficient local storage for:
 Supports multiple backends: Parquet (default), HDF5, CSV, Pickle
 
 Author: Essabri Ali Rayan
-Version: 1.0
+Version: 1.3
 """
 
 import pandas as pd

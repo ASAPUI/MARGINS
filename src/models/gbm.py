@@ -7,7 +7,7 @@ Used as baseline for comparison with more advanced models.
 Formula: dS = mu * S * dt + sigma * S * dW
 
 Author: Essabri Ali rayan
-Version: 1.0
+Version: 1.3
 """
 
 import numpy as np
