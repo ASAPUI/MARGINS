@@ -35,39 +35,6 @@ so :
 
 ---
 
-## 🗂️ Project Structure
-
-```
-monte-carlo-gold/
-│
-├── src/
-│   ├── data/
-│   │   ├── __init__.py          ← Package exports
-│   │   ├── fetcher.py           ← Yahoo Finance + FRED data fetching
-│   │   ├── cleaner.py           ← Missing values, outlier detection
-│   │   ├── features.py          ← Feature engineering (RSI, vol, regimes)
-│   │   └── storage.py           ← Multi-backend caching system
-│   │
-│   ├── models/
-│   │   ├── __init__.py          ← Model registry + create_model() factory
-│   │   ├── gbm.py               ← Geometric Brownian Motion
-│   │   ├── mean_reversion.py    ← Ornstein-Uhlenbeck process
-│   │   ├── jump_diffusion.py    ← Merton jump diffusion
-│   │   ├── heston.py            ← Heston stochastic volatility
-│   │   └── regime_switching.py  ← Markov regime switching
-│   │
-│   └── backtesting/
-│       ├── __init__.py          ← Package exports
-│       ├── backtester.py        ← Walk-forward testing engine
-│       └── comparison.py        ← Model ranking + statistical tests
-│
-├── app.py                       ← Streamlit web dashboard
-├── cli.py                       ← Command-line interface
-├── example.py                   ← Quick-start usage examples
-├── requirements.txt             ← Python dependencies
-├── pyproject.toml               ← Package configuration
-└── README.md                    ← This file
-```
 
 ---
 
