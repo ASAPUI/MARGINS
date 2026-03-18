@@ -563,7 +563,136 @@ Examples:
 Models: gbm | ou | merton | heston | regime
         """,
     )
+import click
+from src.macro import MacroBridge, ParameterAdjuster
 
+# Add to main CLI group
+@click.option('--macro/--no-macro', default=None, 
+              help='Enable/disable WorldMonitor macro intelligence')
+@click.option('--macro-brief', is_flag=True,
+              help='Fetch and display AI world brief')
+@click.pass_context
+def cli(ctx, macro, macro_brief):
+    """Gold Option Monte Carlo Simulator with optional Macro Intelligence."""
+    ctx.ensure_object(dict)
+    
+    # Determine macro mode
+    ctx.obj['macro_enabled'] = macro if macro is not None else \
+        os.getenv('WORLDMONITOR_ENABLED', 'true').lower() == 'true'
+    ctx.obj['macro_brief'] = macro_brief
+    
+    if ctx.obj['macro_enabled']:
+        ctx.obj['macro_bridge'] = MacroBridge()
+
+
+# Modify simulate command
+@cli.command()
+@click.pass_context
+@click.option('--model', '-m', default='gbm', 
+              type=click.Choice(['gbm', 'ou', 'merton', 'heston', 'regime']))
+@click.option('--days', '-d', default=30, help='Trading days to simulate')
+@click.option('--paths', '-p', default=5000, help='Number of simulation paths')
+@click.option('--output', '-o', type=click.Path(), help='Output file (JSON/CSV)')
+def simulate(ctx, model, days, paths, output):
+    """Run Monte Carlo simulation with optional macro adjustments."""
+    
+    # Fetch gold data and calibrate model (existing logic)
+    fetcher = GoldDataFetcher()
+    prices = fetcher.fetch_gold_prices()
+    
+    # Create base model
+    model_obj = create_model(model, historical_data=prices['close'].values)
+    
+    # Macro integration
+    macro_signals = None
+    adjusted_params = None
+    
+    if ctx.obj.get('macro_enabled'):
+        bridge = ctx.obj['macro_bridge']
+        signals = bridge.get_signals_sync()
+        
+        if ctx.obj.get('macro_brief'):
+            brief = bridge.get_brief()
+            if brief:
+                click.echo(f"\n🌍 World Brief:\n{'-'*40}\n{brief}\n{'-'*40}\n")
+        
+        # Apply adjustments based on model type
+        adjuster = ParameterAdjuster(signals)
+        current_price = prices['close'].iloc[-1]
+        
+        if model == 'gbm':
+            adjusted_params = adjuster.adjust_gbm(model_obj.mu, model_obj.sigma)
+        elif model == 'ou':
+            adjusted_params = adjuster.adjust_ou(
+                model_obj.mu, model_obj.sigma, 
+                model_obj.theta, model_obj.kappa
+            )
+        elif model == 'merton':
+            adjusted_params = adjuster.adjust_merton(
+                model_obj.mu, model_obj.sigma,
+                model_obj.lambda_jump, model_obj.mu_j, model_obj.sigma_j
+            )
+        elif model == 'heston':
+            adjusted_params = adjuster.adjust_heston(
+                model_obj.mu, model_obj.v0,
+                model_obj.theta_v, model_obj.kappa_v,
+                model_obj.xi, model_obj.rho
+            )
+        elif model == 'regime':
+            adjusted_params = adjuster.adjust_regime(
+                model_obj.mu[0], model_obj.sigma[0],  # calm
+                model_obj.mu[1], model_obj.sigma[1],  # crisis
+            )
+        
+        macro_signals = signals.to_dict()
+        
+        # Display adjustments
+        if not signals.is_fallback:
+            click.echo(f"📊 Macro Signal: {signals.risk_tier.value.upper()} risk tier")
+            click.echo(f"   CII Top-5 Avg: {signals.cii_top5_avg:.1f}")
+            click.echo(f"   Active Hotspots: {signals.active_hotspot_count}")
+    
+    # Run simulation with adjusted params
+    if hasattr(model_obj, 'simulate_with_macro') and adjusted_params:
+        results = model_obj.simulate_with_macro(
+            S0=current_price,
+            n_steps=days,
+            n_paths=paths,
+            macro_params=adjusted_params
+        )
+    else:
+        results = model_obj.simulate(
+            S0=current_price,
+            n_steps=days,
+            n_paths=paths
+        )
+    
+    # Output results
+    output_data = {
+        'model': model,
+        'days': days,
+        'paths': paths,
+        'current_price': float(current_price),
+        'final_prices': results[:, -1].tolist(),
+        'statistics': {
+            'mean': float(np.mean(results[:, -1])),
+            'std': float(np.std(results[:, -1])),
+            'var_95': float(np.percentile(results[:, -1], 5)),
+            'var_5': float(np.percentile(results[:, -1], 95)),
+        }
+    }
+    
+    if macro_signals:
+        output_data['macro_signals'] = macro_signals
+    if adjusted_params:
+        output_data['parameter_adjustments'] = adjusted_params.to_dict()
+    
+    if output:
+        with open(output, 'w') as f:
+            json.dump(output_data, f, indent=2)
+        click.echo(f"Results saved to {output}")
+    else:
+        click.echo(json.dumps(output_data, indent=2))
     # ── Global options ─────────────────────────────────────────────────────────
     parser.add_argument("--no-color", action="store_true",
                         help="Disable colored output")

@@ -15,7 +15,16 @@ import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
 from datetime import datetime, timedelta
+from src.macro import MacroBridge, ParameterAdjuster
 import logging
+import time
+from datetime import datetime as dt_datetime
+
+try:
+    from streamlit_autorefresh import st_autorefresh
+    HAS_AUTOREFRESH = True
+except ImportError:
+    HAS_AUTOREFRESH = False
 
 # ── Page Config ────────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -394,7 +403,54 @@ with st.sidebar:
     st.markdown("## 🥇 Gold Predictor")
     st.markdown("<hr>", unsafe_allow_html=True)
 
+    # ── 5-minute auto-refresh (price + macro + trade signal) ───────────────
+    REFRESH_MS = 5 * 60 * 1000
+
+    if HAS_AUTOREFRESH:
+        refresh_count = st_autorefresh(interval=REFRESH_MS, key="gold_autorefresh")
+
+        # On each timed refresh: clear price cache + refresh macro signals
+        prev_count = st.session_state.get("_last_refresh_count", -1)
+        if refresh_count != prev_count and refresh_count > 0:
+            st.session_state["_last_refresh_count"] = refresh_count
+
+            # 1. Clear price cache so Yahoo Finance is re-fetched
+            get_current_price.clear()
+
+            # 2. Refresh macro signals if bridge exists
+            if "macro_bridge" in st.session_state:
+                try:
+                    bridge_ref = st.session_state.macro_bridge
+                    # Clear bridge cache so it re-fetches from all tiers
+                    bridge_ref._cache.clear()
+                    bridge_ref._brief_cache.clear()
+                    new_signals = bridge_ref.get_signals_sync()
+                    st.session_state.macro_signals = new_signals
+                    if new_signals.brief_text:
+                        st.session_state.macro_brief = new_signals.brief_text
+                except Exception:
+                    pass  # don't crash the app if macro fetch fails
+
+            # 3. Re-run simulation with updated price if paths exist
+            if "paths" in st.session_state:
+                try:
+                    new_price, _ = get_current_price()
+                    new_paths = run_simulation(
+                        st.session_state.get("_last_model", list(MODELS_AVAILABLE.keys())[0]),
+                        new_price,
+                        st.session_state["n_steps"] + 1,
+                        st.session_state.get("_last_n_paths", 1000),
+                        None, None,
+                        fetch_gold_data(st.session_state.get("_last_period", "2y")),
+                        seed=st.session_state.get("_last_seed", None),
+                    )
+                    st.session_state["paths"] = new_paths
+                    st.session_state["S0"]    = new_price
+                except Exception:
+                    pass  # keep existing paths if re-simulation fails
+
     current_price, price_change = get_current_price()
+    now_str = dt_datetime.now().strftime("%H:%M:%S")
 
     delta_color = GREEN if price_change >= 0 else RED
     st.markdown(
@@ -405,6 +461,49 @@ with st.sidebar:
         f"{'▲' if price_change >= 0 else '▼'} {abs(price_change):.2f}%</span>",
         unsafe_allow_html=True,
     )
+
+    # Per gram / kg
+    st.markdown(
+        f"<span style='color:#8888AA;font-size:0.78rem'>"
+        f"${current_price/31.1035:,.2f} / g &nbsp;·&nbsp; "
+        f"${current_price*32.1507:,.0f} / kg</span>",
+        unsafe_allow_html=True,
+    )
+
+    # Refresh status
+    if HAS_AUTOREFRESH:
+        st.markdown(
+            f"<div style='margin-top:6px; padding:6px 8px; background:#0d1117;"
+            f"border-radius:6px; border:1px solid #1e1e2e;'>"
+            f"<span style='color:#4CAF50;font-size:0.72rem;font-weight:600;'>"
+            f"🔄 Live · auto-refresh every 5 min</span><br>"
+            f"<span style='color:#555;font-size:0.68rem;'>"
+            f"Price · Macro · Trade signal</span><br>"
+            f"<span style='color:#444;font-size:0.68rem;'>Last: {now_str}</span>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            f"<div style='margin-top:4px;'>"
+            f"<span style='color:#888;font-size:0.70rem;'>Last: {now_str}</span>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+        if st.button("🔄 Refresh all", key="manual_refresh_btn",
+                     help="Refresh price, macro signals and trade signal"):
+            get_current_price.clear()
+            if "macro_bridge" in st.session_state:
+                try:
+                    st.session_state.macro_bridge._cache.clear()
+                    st.session_state.macro_bridge._brief_cache.clear()
+                    new_sig = st.session_state.macro_bridge.get_signals_sync()
+                    st.session_state.macro_signals = new_sig
+                    if new_sig.brief_text:
+                        st.session_state.macro_brief = new_sig.brief_text
+                except Exception:
+                    pass
+            st.rerun()
 
     st.markdown("<hr>", unsafe_allow_html=True)
     st.markdown("### ⚙️ Parameters")
@@ -456,6 +555,192 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TRADE SIGNAL ENGINE
+# ══════════════════════════════════════════════════════════════════════════════
+
+def compute_trade_signal(paths, S0, n_steps, macro_signals=None):
+    """
+    Derive a structured trade recommendation from simulation output.
+
+    Returns a dict with:
+      signal        : BUY / SELL / HOLD
+      confidence    : LOW / MEDIUM / HIGH
+      entry         : suggested entry price
+      stop_loss     : suggested stop-loss price
+      take_profit   : suggested take-profit price
+      risk_reward   : ratio
+      reasons       : list of reasoning strings
+      warnings      : list of risk warnings
+    """
+    final = paths[:, -1]
+    S0 = float(S0)
+
+    # ── Core stats ────────────────────────────────────────────────────────────
+    mean_final   = float(np.mean(final))
+    median_final = float(np.median(final))
+    p5           = float(np.percentile(final, 5))    # VaR 95%
+    p10          = float(np.percentile(final, 10))   # VaR 90%
+    p25          = float(np.percentile(final, 25))
+    p75          = float(np.percentile(final, 75))
+    p90          = float(np.percentile(final, 90))
+    p95          = float(np.percentile(final, 95))
+
+    prob_gain    = float(np.mean(final > S0))
+    prob_gain5   = float(np.mean(final > S0 * 1.05))
+    prob_loss5   = float(np.mean(final < S0 * 0.95))
+    prob_loss10  = float(np.mean(final < S0 * 0.90))
+
+    expected_return = (mean_final - S0) / S0
+
+    # Max drawdown across paths
+    peak = np.maximum.accumulate(paths, axis=1)
+    drawdowns = (paths - peak) / peak
+    avg_max_dd = float(np.mean(np.min(drawdowns, axis=1)))
+
+    # Skewness — positive = more upside tail
+    from scipy.stats import skew as sp_skew
+    ret_skew = float(sp_skew(final))
+
+    # ── Macro overlay ─────────────────────────────────────────────────────────
+    macro_risk   = "neutral"
+    macro_boost  = 0.0
+    macro_warn   = []
+
+    if macro_signals is not None and not macro_signals.is_fallback:
+        cii_avg = macro_signals.cii_top5_avg
+        cii_max = macro_signals.cii_max
+        n_crit  = macro_signals.critical_anomaly_count
+        n_high  = macro_signals.high_anomaly_count
+
+        if cii_avg >= 70 or n_crit >= 2:
+            macro_risk  = "high"
+            macro_boost = 0.05   # 5% upside bias — safe-haven demand
+            macro_warn.append(f"CII Top-5 avg {cii_avg:.0f}/100 — elevated geopolitical stress")
+        elif cii_avg >= 55 or n_high >= 3:
+            macro_risk  = "elevated"
+            macro_boost = 0.02
+            macro_warn.append(f"CII Top-5 avg {cii_avg:.0f}/100 — moderate geopolitical risk")
+        else:
+            macro_risk  = "calm"
+            macro_boost = -0.01  # slight headwind in calm regimes
+
+        if cii_max >= 80:
+            macro_warn.append(f"Single-country crisis risk: CII max {cii_max:.0f}/100")
+        if n_crit > 0:
+            macro_warn.append(f"{n_crit} critical anomaly event(s) detected")
+
+    # ── Signal logic ─────────────────────────────────────────────────────────
+    reasons  = []
+    warnings = []
+    score    = 0  # positive = bullish, negative = bearish
+
+    # Expected return
+    if expected_return > 0.05:
+        score += 3
+        reasons.append(f"Strong expected return: +{expected_return*100:.1f}%")
+    elif expected_return > 0.02:
+        score += 2
+        reasons.append(f"Positive expected return: +{expected_return*100:.1f}%")
+    elif expected_return > 0:
+        score += 1
+        reasons.append(f"Marginal positive expected return: +{expected_return*100:.2f}%")
+    elif expected_return < -0.02:
+        score -= 2
+        reasons.append(f"Negative expected return: {expected_return*100:.1f}%")
+    else:
+        score -= 1
+        reasons.append(f"Slightly negative expected return: {expected_return*100:.2f}%")
+
+    # Probability of gain
+    if prob_gain > 0.65:
+        score += 2
+        reasons.append(f"High probability of gain: {prob_gain*100:.0f}%")
+    elif prob_gain > 0.55:
+        score += 1
+        reasons.append(f"Moderate probability of gain: {prob_gain*100:.0f}%")
+    elif prob_gain < 0.40:
+        score -= 2
+        reasons.append(f"Low probability of gain: {prob_gain*100:.0f}%")
+
+    # Skew — positive skew favours longs
+    if ret_skew > 0.3:
+        score += 1
+        reasons.append(f"Positive return skew ({ret_skew:.2f}) — upside tail larger than downside")
+    elif ret_skew < -0.3:
+        score -= 1
+        warnings.append(f"Negative return skew ({ret_skew:.2f}) — downside tail risk elevated")
+
+    # Macro
+    score += round(macro_boost * 20)
+    if macro_risk == "high":
+        score += 1
+        reasons.append("Macro: high geopolitical stress → safe-haven gold demand")
+    elif macro_risk == "elevated":
+        reasons.append("Macro: elevated geopolitical risk — supportive for gold")
+    elif macro_risk == "calm":
+        reasons.append("Macro: calm environment — gold may face headwinds vs risk assets")
+
+    # Risk/reward check
+    upside   = p75 - S0
+    downside = S0 - p25
+    rr_ratio = upside / downside if downside > 0 else 0
+    if rr_ratio >= 2.0:
+        score += 1
+        reasons.append(f"Favourable risk/reward: {rr_ratio:.1f}x")
+    elif rr_ratio < 1.0:
+        score -= 1
+        warnings.append(f"Poor risk/reward ratio: {rr_ratio:.1f}x")
+
+    # Drawdown warning
+    if avg_max_dd < -0.10:
+        warnings.append(f"High average drawdown: {avg_max_dd*100:.1f}% across paths")
+
+    # ── Final signal ──────────────────────────────────────────────────────────
+    if score >= 4:
+        signal, confidence = "BUY",  "HIGH"
+    elif score >= 2:
+        signal, confidence = "BUY",  "MEDIUM"
+    elif score >= 1:
+        signal, confidence = "BUY",  "LOW"
+    elif score <= -3:
+        signal, confidence = "SELL", "HIGH"
+    elif score <= -1:
+        signal, confidence = "SELL", "LOW"
+    else:
+        signal, confidence = "HOLD", "MEDIUM"
+
+    # ── Levels ────────────────────────────────────────────────────────────────
+    entry       = S0                          # current market price
+    stop_loss   = round(p5,  2)               # VaR 95% — cut if market reaches this
+    take_profit = round(p90, 2)               # 90th percentile target
+    rr_final    = (take_profit - entry) / (entry - stop_loss) if entry > stop_loss else 0
+
+    warnings += macro_warn
+
+    return {
+        "signal":       signal,
+        "confidence":   confidence,
+        "score":        score,
+        "entry":        round(entry, 2),
+        "stop_loss":    stop_loss,
+        "take_profit":  take_profit,
+        "risk_reward":  round(rr_final, 2),
+        "expected_return": round(expected_return * 100, 2),
+        "prob_gain":    round(prob_gain * 100, 1),
+        "prob_loss5":   round(prob_loss5 * 100, 1),
+        "prob_gain5":   round(prob_gain5 * 100, 1),
+        "p25": round(p25, 2), "p75": round(p75, 2),
+        "p5":  round(p5,  2), "p95": round(p95, 2),
+        "mean_final":   round(mean_final, 2),
+        "avg_max_dd":   round(avg_max_dd * 100, 2),
+        "macro_risk":   macro_risk,
+        "reasons":      reasons,
+        "warnings":     warnings,
+        "horizon_days": n_steps,
+    }
+
 # Load data
 prices = fetch_gold_data(data_period)
 
@@ -482,6 +767,11 @@ with tab1:
                 st.session_state["model_name"] = model_name
                 st.session_state["n_steps"]    = n_steps
                 st.session_state["S0"]         = current_price
+                # Store params for auto-refresh re-simulation
+                st.session_state["_last_model"]   = model_name
+                st.session_state["_last_n_paths"]  = n_paths
+                st.session_state["_last_period"]   = data_period
+                st.session_state["_last_seed"]     = seed if seed != 0 else None
             except Exception as e:
                 st.error(f"Simulation error: {e}")
                 st.stop()
@@ -739,8 +1029,304 @@ with tab3:
         **DARK_LAYOUT,
     )
     st.plotly_chart(fig_hist, use_container_width=True)
+def render_macro_tab():
+    """Render the Macro Intelligence dashboard tab."""
+    st.header("🌍 Macro Intelligence (WorldMonitor)")
+    
+    # Initialize bridge in session state
+    if 'macro_bridge' not in st.session_state:
+        st.session_state.macro_bridge = MacroBridge()
+        st.session_state.macro_signals = None
+    
+    bridge = st.session_state.macro_bridge
+    
+    # Control panel
+    col1, col2, col3 = st.columns([1, 1, 2])
+    
+    with col1:
+        if st.button("🔄 Refresh Signals", type="primary"):
+            with st.spinner("Fetching macro data..."):
+                signals_result = bridge.get_signals_sync()
+                st.session_state.macro_signals = signals_result
+                # Brief is embedded in the signal; fall back to sync call if missing
+                if signals_result.brief_text:
+                    st.session_state.macro_brief = signals_result.brief_text
+                else:
+                    st.session_state.macro_brief = bridge.get_brief_sync()
+            st.success("Signals updated")
+    
+    with col2:
+        st.caption(f"Status: {'🟢 Live' if bridge.is_healthy() else '🟡 Fallback'}")
+    
+    with col3:
+        enable_macro = st.toggle("Enable Macro Adjustments", value=True)
+        st.session_state.macro_enabled = enable_macro
+    
+    signals = st.session_state.macro_signals
+    
+    if signals is None:
+        st.info("Click 'Refresh Signals' to load WorldMonitor data")
+        return
+    
+    # Status banner
+    risk_color = {
+        'stable': 'green',
+        'elevated': 'blue', 
+        'high': 'orange',
+        'critical': 'red',
+        'extreme': 'darkred'
+    }.get(signals.risk_tier.value, 'gray')
+    
+    st.markdown(f"""
+    <div style='padding: 1rem; border-radius: 0.5rem; background-color: {risk_color}20; 
+                border-left: 5px solid {risk_color};'>
+        <h4 style='margin: 0; color: {risk_color};'>
+            Risk Level: {signals.risk_tier.value.upper()}
+            {'⚠️ (Fallback Mode)' if signals.is_fallback else ''}
+        </h4>
+        <p style='margin: 0.5rem 0 0 0; font-size: 0.9rem;'>
+            Last updated: {signals.fetched_at.strftime('%Y-%m-%d %H:%M UTC')}
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Metrics row
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("CII Top-5 Avg", f"{signals.cii_top5_avg:.1f}", 
+              delta=f"{signals.cii_top5_avg - 50:.1f} vs neutral")
+    m2.metric("Max Single CII", f"{signals.cii_max:.1f}")
+    m3.metric("High Anomalies", signals.high_anomaly_count)
+    m4.metric("Critical Anomalies", signals.critical_anomaly_count, 
+              delta=f"{signals.critical_anomaly_count}" if signals.critical_anomaly_count > 0 else None,
+              delta_color="inverse")
+    
+    # CII Heatmap
+    st.subheader("Country Instability Index (Top 10)")
+    if signals.cii_scores:
+        import pandas as pd
+        df = pd.DataFrame([
+            {'Country': k, 'CII Score': v, 'Risk': '🔴' if v > 70 else '🟠' if v > 50 else '🟡' if v > 30 else '🟢'}
+            for k, v in sorted(signals.cii_scores.items(), key=lambda x: x[1], reverse=True)[:10]
+        ])
+        st.dataframe(df, use_container_width=True, hide_index=True)
+    
+    # Anomaly feed
+    if signals.anomaly_zscores:
+        st.subheader("Live Anomaly Feed")
+        for anomaly in signals.anomaly_zscores[:5]:  # Top 5
+            severity_emoji = "🔴" if anomaly.z_score >= 3.0 else "🟠" if anomaly.z_score >= 2.0 else "🟡"
+            with st.expander(f"{severity_emoji} {anomaly.region} | {anomaly.event_type} (z={anomaly.z_score:.2f})"):
+                st.write(f"**Region:** {anomaly.region}")
+                st.write(f"**Type:** {anomaly.event_type}")
+                st.write(f"**Z-Score:** {anomaly.z_score:.2f}")
+                st.write(f"**Detected:** {anomaly.timestamp}")
+                if anomaly.metadata:
+                    st.json(anomaly.metadata)
+    
+    # World Brief — always render, use signal.brief_text as primary source
+    st.subheader("AI World Brief")
+    brief_text = None
+    if signals is not None and signals.brief_text:
+        brief_text = signals.brief_text
+    elif hasattr(st.session_state, 'macro_brief') and st.session_state.macro_brief:
+        brief_text = st.session_state.macro_brief
 
+    if brief_text:
+        st.markdown(f"""
+        <div style='background-color: #1a1a2e; padding: 1.2rem; border-radius: 0.5rem;
+                    border-left: 4px solid #C9A84C; font-size: 0.92rem; line-height: 1.7;
+                    color: #E8E8F0;'>
+            {brief_text}
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown(
+            "<div style='color:#8888AA; font-style:italic; padding:0.5rem;'>"
+            "Click Refresh Signals to generate world brief.</div>",
+            unsafe_allow_html=True
+        )
+    
+    # Parameter Delta Panel (if simulation has been run)
+    if 'last_params' in st.session_state:
+        st.subheader("Applied Parameter Adjustments")
+        st.json(st.session_state.last_params.to_dict())
 
+# Add to main app tabs
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    "📈 Simulation", "⚠️ Risk Analysis", "📊 Market Data",
+    "ℹ️ Model Guide", "🌍 Macro Intelligence", "🎯 Trade Signal"
+])
+
+with tab5:
+    render_macro_tab()
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TAB 6 — TRADE SIGNAL
+# ══════════════════════════════════════════════════════════════════════════════
+with tab6:
+    st.markdown("### 🎯 Trade Signal")
+
+    if "paths" not in st.session_state:
+        st.info("Run a simulation first in the Simulation tab to generate a trade signal.")
+    else:
+        paths_ts  = st.session_state["paths"]
+        S0_ts     = st.session_state["S0"]
+        n_steps_ts = st.session_state["n_steps"]
+        macro_sig = st.session_state.get("macro_signals", None)
+
+        sig = compute_trade_signal(paths_ts, S0_ts, n_steps_ts, macro_sig)
+
+        # ── Signal Banner ─────────────────────────────────────────────────────
+        sig_colors = {"BUY": ("#1a3a1a", "#4CAF50"), "SELL": ("#3a1a1a", "#E05555"), "HOLD": ("#2a2a1a", "#E8C97A")}
+        sig_icons  = {"BUY": "▲", "SELL": "▼", "HOLD": "◆"}
+        bg, fg = sig_colors.get(sig["signal"], ("#1e1e1e", "#E8E8F0"))
+        icon   = sig_icons.get(sig["signal"], "")
+
+        conf_color = {"HIGH": "#4CAF50", "MEDIUM": "#E8C97A", "LOW": "#E05555"}
+        cc = conf_color.get(sig["confidence"], "#888")
+
+        st.markdown(f"""
+        <div style='background:{bg}; border:2px solid {fg}; border-radius:12px;
+                    padding:1.5rem 2rem; margin-bottom:1.2rem;'>
+            <div style='display:flex; align-items:center; gap:1.5rem;'>
+                <div style='font-size:3.5rem; color:{fg}; font-weight:800;
+                            font-family:"Playfair Display",serif; line-height:1;'>
+                    {icon} {sig["signal"]}
+                </div>
+                <div>
+                    <div style='color:{cc}; font-size:0.85rem; font-weight:600;
+                                letter-spacing:0.1em; text-transform:uppercase;'>
+                        {sig["confidence"]} CONFIDENCE
+                    </div>
+                    <div style='color:#8888AA; font-size:0.85rem; margin-top:4px;'>
+                        {sig["horizon_days"]}-day horizon &nbsp;|&nbsp;
+                        Score: {sig["score"]:+d} &nbsp;|&nbsp;
+                        Macro: {sig["macro_risk"].upper()}
+                    </div>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # ── Entry Levels ──────────────────────────────────────────────────────
+        st.markdown("#### Entry Levels")
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Entry (Current)", f"${sig['entry']:,.2f}")
+        c2.metric("Stop-Loss",       f"${sig['stop_loss']:,.2f}",
+                  delta=f"{(sig['stop_loss']-sig['entry'])/sig['entry']*100:.1f}%",
+                  delta_color="inverse")
+        c3.metric("Take-Profit",     f"${sig['take_profit']:,.2f}",
+                  delta=f"+{(sig['take_profit']-sig['entry'])/sig['entry']*100:.1f}%")
+        c4.metric("Risk / Reward",   f"{sig['risk_reward']:.1f}x",
+                  delta="good" if sig["risk_reward"] >= 2 else "low",
+                  delta_color="normal" if sig["risk_reward"] >= 2 else "inverse")
+
+        # ── Per-unit and per-gram ─────────────────────────────────────────────
+        st.markdown("#### Price Reference")
+        pc1, pc2, pc3 = st.columns(3)
+        pc1.metric("Per Troy Oz",  f"${sig['entry']:,.2f}")
+        pc2.metric("Per Gram",     f"${sig['entry']/31.1035:,.2f}")
+        pc3.metric("Per Kilogram", f"${sig['entry']*32.1507:,.0f}")
+
+        # ── Probability Panel ────────────────────────────────────────────────
+        st.markdown("#### Probability Breakdown")
+        p1, p2, p3, p4 = st.columns(4)
+        p1.metric("P(Any Gain)",   f"{sig['prob_gain']:.1f}%")
+        p2.metric("P(Gain > 5%)",  f"{sig['prob_gain5']:.1f}%")
+        p3.metric("P(Loss > 5%)",  f"{sig['prob_loss5']:.1f}%")
+        p4.metric("Avg Drawdown",  f"{sig['avg_max_dd']:.1f}%")
+
+        # ── Price Distribution Bar ────────────────────────────────────────────
+        st.markdown("#### Simulated Price Range at Horizon")
+        import plotly.graph_objects as go
+        fig_range = go.Figure()
+
+        # Background range p5→p95
+        fig_range.add_trace(go.Scatter(
+            x=[sig["p5"], sig["p95"]], y=[1, 1],
+            mode="lines",
+            line=dict(color="rgba(200,200,200,0.15)", width=40),
+            name="90% range", showlegend=True,
+            hovertemplate="90%% range: $%{x:,.0f}<extra></extra>"
+        ))
+        # IQR p25→p75
+        fig_range.add_trace(go.Scatter(
+            x=[sig["p25"], sig["p75"]], y=[1, 1],
+            mode="lines",
+            line=dict(color="rgba(201,168,76,0.4)", width=30),
+            name="IQR (25-75%)", showlegend=True,
+            hovertemplate="IQR: $%{x:,.0f}<extra></extra>"
+        ))
+        # Mean
+        fig_range.add_trace(go.Scatter(
+            x=[sig["mean_final"]], y=[1],
+            mode="markers+text",
+            marker=dict(color=GOLD, size=14, symbol="diamond"),
+            text=[f"  Mean<br>  ${sig['mean_final']:,.0f}"],
+            textposition="middle right",
+            textfont=dict(color=GOLD, size=11),
+            name="Mean", showlegend=False,
+        ))
+        # Entry
+        fig_range.add_vline(
+            x=S0_ts, line=dict(color="#5599EE", dash="dash", width=1.5),
+            annotation_text=f"Entry ${S0_ts:,.0f}",
+            annotation_font=dict(color="#5599EE", size=11),
+        )
+        # Stop-loss
+        fig_range.add_vline(
+            x=sig["stop_loss"], line=dict(color=RED, dash="dot", width=1.5),
+            annotation_text=f"SL ${sig['stop_loss']:,.0f}",
+            annotation_font=dict(color=RED, size=11),
+        )
+        # Take-profit
+        fig_range.add_vline(
+            x=sig["take_profit"], line=dict(color=GREEN, dash="dot", width=1.5),
+            annotation_text=f"TP ${sig['take_profit']:,.0f}",
+            annotation_font=dict(color=GREEN, size=11),
+        )
+
+        # Build layout without xaxis/yaxis conflicts with DARK_LAYOUT
+        range_layout = {k: v for k, v in DARK_LAYOUT.items()
+                        if k not in ("xaxis", "yaxis", "margin")}
+        range_layout.update(dict(
+            height=180,
+            yaxis=dict(visible=False, range=[0, 2]),
+            xaxis=dict(title="Gold Price (USD / troy oz)", tickformat="$,.0f",
+                       gridcolor="#1E1E2E", showgrid=True, zeroline=False),
+            legend=dict(orientation="h", y=1.3, x=0),
+            margin=dict(l=40, r=40, t=50, b=40),
+        ))
+        fig_range.update_layout(**range_layout)
+        st.plotly_chart(fig_range, use_container_width=True)
+
+        # ── Reasoning ─────────────────────────────────────────────────────────
+        col_r, col_w = st.columns(2)
+        with col_r:
+            st.markdown("#### ✅ Reasons")
+            for r in sig["reasons"]:
+                st.markdown(f"- {r}")
+        with col_w:
+            st.markdown("#### ⚠️ Warnings")
+            if sig["warnings"]:
+                for w in sig["warnings"]:
+                    st.markdown(f"- {w}")
+            else:
+                st.markdown("*No significant risk warnings.*")
+
+        # ── Disclaimer ────────────────────────────────────────────────────────
+        st.markdown("""
+        <div style='margin-top:2rem; padding:0.8rem 1rem; border-radius:6px;
+                    background:#1a1a1a; border:1px solid #333;
+                    font-size:0.78rem; color:#666;'>
+            <b>Disclaimer:</b> This signal is generated from a Monte Carlo 
+            stochastic simulation and is for <b>educational and research purposes 
+            only</b>. It does not constitute financial advice. Past simulation 
+            performance does not guarantee future results. Always consult a 
+            qualified financial advisor before trading. Gold markets carry 
+            significant risk of loss.
+        </div>
+        """, unsafe_allow_html=True)
 # ══════════════════════════════════════════════════════════════════════════════
 # TAB 4 — MODEL GUIDE
 # ══════════════════════════════════════════════════════════════════════════════
