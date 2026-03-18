@@ -108,17 +108,18 @@ python cli.py compare --days 30 --output results.json
 ## 📦 Requirements
 
 ```
-Python >= 3.10
-numpy
-pandas
-scipy
-numba
-yfinance
-fredapi          # optional — for macro data
-streamlit
-plotly
-scikit-learn
-pytest
+yfinance>=0.2.0
+pandas>=1.5.0
+numpy>=1.24.0
+scipy>=1.10.0
+fredapi>=0.5.0
+pyarrow>=10.0.0  # For Parquet support
+tables>=3.8.0    # For HDF5 support
+torch>=2.0.0
+httpx>=0.27
+cachetools>=5.3
+pydantic>=2.0
+
 ```
 
 Install everything at once:
