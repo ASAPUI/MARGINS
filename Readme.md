@@ -19,7 +19,7 @@ The system mirrors tools used by professional quantitative traders and hedge fun
 the price it's per troy ounce :
 1 troy ounce = 31.1 grams
 so :
-(the price showen in the simulation) ÷ 31.1035 = ~$157.61 per gram
+(the price showen in the simulation) ÷ 31.1035 = ~the price per gram
 ---
 
 ## ✨ Features
