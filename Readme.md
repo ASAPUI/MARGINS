@@ -350,7 +350,7 @@ python cli.py backtest --models gbm ou lstm --period 2y
 > A production-grade stochastic simulation engine for gold price forecasting and risk analysis.
 
 **Author:** Essabri Ali Rayan  
-**Version:** 1.0.0  
+**Version:** 1.2.0  
 **License:** MIT
 
 ---
