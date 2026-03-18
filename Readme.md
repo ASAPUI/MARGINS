@@ -14,7 +14,12 @@
 This project uses **Monte Carlo simulation** to predict gold price movements and quantify risk. It combines 5 advanced stochastic models with real market data, professional risk analytics, an interactive Streamlit dashboard, and a full command-line interface.
 
 The system mirrors tools used by professional quantitative traders and hedge funds — calibrating models from historical data, simulating thousands of possible price futures, and extracting probability distributions and risk metrics from the results.
-
+---
+## ⚠️ Warning!!
+the price it's per troy ounce :
+1 troy ounce = 31.1 grams
+so :
+(the price showen in the simulation) ÷ 31.1035 = ~$157.61 per gram
 ---
 
 ## ✨ Features
