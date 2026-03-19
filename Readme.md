@@ -281,7 +281,8 @@ pytest tests/test_models.py -v
 
 ## 📄 License
 
-BSL LICENS-- not for commercial use
+BSL LICENS-- Free for no commercial use 
+it's just AI assistant it can make mistake
 
 ---
 
