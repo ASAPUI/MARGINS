@@ -43,8 +43,8 @@ so :
 ### 1. Clone & Install
 
 ```bash
-git clone https://github.com/ASAPUI/monte-carlo-options.git
-cd monte-carlo-options
+git clone https://github.com/ASAPUI/MARGINS.git
+cd MARGINS
 pip install -r requirements.txt
 ```
 
