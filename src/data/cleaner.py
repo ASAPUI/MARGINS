@@ -461,7 +461,7 @@ def clean_gold_data(df: pd.DataFrame) -> pd.DataFrame:
 
 if __name__ == "__main__":
     # Example usage
-    from fetcher import GoldDataFetcher
+    from .fetcher import GoldDataFetcher
     
     fetcher = GoldDataFetcher()
     raw_data = fetcher.fetch_gold_prices('GC=F', period='1y')

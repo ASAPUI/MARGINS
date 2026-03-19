@@ -39,7 +39,15 @@ from .regime_switching import (
     create_regime_model
 )
 
-__version__ = '1.2.0'
+__version__ = '1.3.0'
+
+# Optional LSTM model — requires torch; all other 5 models work without it
+try:
+    from .lstm_model import LSTMModel
+    _LSTM_AVAILABLE = True
+except ImportError:
+    _LSTM_AVAILABLE = False
+    LSTMModel = None
 
 __all__ = [
     # GBM
@@ -82,6 +90,10 @@ MODEL_REGISTRY = {
     'regime':          (RegimeSwitchingModel,     create_regime_model),
     'regime_switching':(RegimeSwitchingModel,     create_regime_model),
 }
+
+# Register LSTM only if torch is installed
+if _LSTM_AVAILABLE:
+    MODEL_REGISTRY['lstm'] = (LSTMModel, LSTMModel)
 
 
 def create_model(

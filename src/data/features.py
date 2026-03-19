@@ -470,8 +470,8 @@ def sequence_builder(feature_matrix: np.ndarray, window: int = 20) -> Tuple[np.n
 if __name__ == "__main__":
     # Example usage
     import sys
-    from fetcher import GoldDataFetcher
-    from cleaner import DataCleaner
+    from .fetcher import GoldDataFetcher
+    from .cleaner import DataCleaner
     
     # Fetch and clean data
     fetcher = GoldDataFetcher()

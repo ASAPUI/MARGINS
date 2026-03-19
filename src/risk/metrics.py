@@ -8,9 +8,14 @@ Version:1.3
 """
 
 import numpy as np
-from numba import jit
 from typing import Dict, Tuple, List, Union
-
+try:
+    from numba import jit
+    HAS_NUMBA = True
+except ImportError:
+    HAS_NUMBA = False
+    def jit(*args, **kwargs):
+        return args[0] if args and callable(args[0]) else lambda f: f
 
 @jit(nopython=True, cache=True)
 def _calculate_max_drawdown_numba(prices: np.ndarray) -> float:

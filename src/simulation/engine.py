@@ -16,8 +16,10 @@ from datetime import datetime, timedelta
 import logging
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import multiprocessing as mp
-from tqdm import tqdm
-
+try:
+    from tqdm import tqdm
+except ImportError:
+    tqdm = lambda x, **kw: x
 # Try to import Numba for JIT compilation
 try:
     from numba import jit, prange

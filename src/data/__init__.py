@@ -29,8 +29,8 @@ author:Essabri Ali Rayan
 Version :1.3
 """
 
-from fetcher import GoldDataFetcher, fetch_gold_data_simple
-from cleaner import DataCleaner, clean_gold_data
+from .fetcher import GoldDataFetcher, fetch_gold_data_simple
+from .cleaner import DataCleaner, clean_gold_data
 from features import FeatureEngineer, engineer_features
 from storage import DataStorage, CacheManager, quick_cache, quick_load
 
