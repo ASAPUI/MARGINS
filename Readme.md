@@ -289,7 +289,7 @@ BSL LICENS-- not for commercial use
 
 **Essabri Ali Rayan**  
 GitHub: [@ASAPUI](https://github.com/ASAPUI)  
-Project: [monte-carlo-options](https://github.com/ASAPUI/monte-carlo-options)
+Project: [MARGINS](https://github.com/ASAPUI/MARGINS)
 customise service: +2120694025836 or alirayanessabri@gmail.com
 ---
 
