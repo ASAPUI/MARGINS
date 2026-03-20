@@ -284,3 +284,4 @@ linkdin:https://www.linkedin.com/in/essabri-ali-rayan-9a64b13b2/
 ---
 
 > *"I don't know exactly what will happen, but if I simulate thousands of possible futures and average them, I'll get a very good estimate."* — The Monte Carlo philosophy 🎲
+>warning: we don't take any responsability of any lose or decrasse of the value of your asset after the wrong usage of our product and we don't take responsabilities of any bad financial action or desicion taken by any of the user it's just a tool that help to anlyze the gold market thank you for using our product . 
