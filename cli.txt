@@ -5,3 +5,14 @@ python cli.py simulate --model merton --days 30 --macro --macro-brief
 python cli.py risk --model ou --days 60 --macro
 -----most_used_by_me:)-------
 python cli.py simulate --model ou --days 30 --paths 5000
+# Simulate a portfolio
+python cli_portfolio.py portfolio \
+  --assets GC=F SPY TLT \
+  --weights 0.40 0.40 0.20 \
+  --days 30 --paths 5000
+
+# Find optimal weights across all 3 strategies
+python cli_portfolio.py optimize \
+  --assets GC=F SPY TLT \
+  --strategy all \
+  --days 30 --output results.json

@@ -70,6 +70,7 @@ from plotly.subplots import make_subplots  # noqa: F401 – kept for callers
 from datetime import datetime, timedelta  # noqa: F401
 from datetime import datetime as dt_datetime
 from scipy.stats import skew as sp_skew
+from app_portfolio_tab import render_portfolio_tab
 import logging
 import time  # noqa: F401
 
@@ -992,7 +993,7 @@ st.markdown(
 # Load data
 prices = fetch_gold_data(data_period)
 
-tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 , tab8= st.tabs([
     "📈 Simulation",
     "⚠️ Risk Analysis",
     "📊 Market Data",
@@ -1000,6 +1001,7 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "🌐 Macro Intelligence",
     "🎯 Trade Signal",
     "📉 Avg Error",
+    "📦 Portfolio",
 ])
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1531,56 +1533,127 @@ with tab6:
 with tab7:
     st.markdown("### 📉 Model Average Error (Backtest)")
     st.markdown(
-        "<p style='color:#8888AA'>Compares predicted vs actual gold prices "
-        "using walk-forward backtesting.</p>",
+        "<p style='color:#8888AA'>Walk-forward backtest: trains on older data, "
+        "predicts on the most recent period, compares to actual prices.</p>",
         unsafe_allow_html=True,
     )
 
     if "paths" not in st.session_state:
         st.info("Run a simulation first (Tab 1) to enable error analysis.")
     else:
-        with st.spinner("Calculating errors..."):
-            test_prices = prices["price"].iloc[-252:].values
-            results     = []
+        # ── Controls ──────────────────────────────────────────────────────────
+        col_ctrl1, col_ctrl2 = st.columns(2)
+        with col_ctrl1:
+            test_window = st.selectbox(
+                "Test window (days to predict)",
+                [21, 63, 126, 252],
+                index=1,
+                help="Shorter = more recent, harder test. Longer = more data points but covers trending periods."
+            )
+        with col_ctrl2:
+            n_paths_bt = st.select_slider(
+                "Paths per model",
+                options=[200, 500, 1000, 2000],
+                value=1000,
+                help="More paths = more accurate median estimate but slower."
+            )
 
-            for m_name, ModelCls in MODELS_AVAILABLE.items():
-                try:
-                    train = prices["price"].iloc[:-252].values
-                    model = ModelCls()
-                    if hasattr(model, "calibrate"):
-                        if m_name in ("Mean Reversion (OU)", "Heston", "Regime Switching"):
-                            model.calibrate(train)
+        run_bt = st.button("▶ Run Backtest", use_container_width=True)
+
+        if run_bt or "bt_results" not in st.session_state:
+            with st.spinner("Running walk-forward backtest for all models…"):
+                test_prices = prices["price"].iloc[-test_window:].values
+                train       = prices["price"].iloc[:-test_window].values
+                S0_bt       = float(train[-1])
+                results     = []
+
+                for m_name, ModelCls in MODELS_AVAILABLE.items():
+                    try:
+                        model = ModelCls()
+
+                        # ── Calibrate ─────────────────────────────────────────
+                        if hasattr(model, "calibrate"):
+                            # Heston v2 MLE needs at least 100 prices
+                            if m_name in ("Heston", "Heston + Jumps (Bates)"):
+                                if hasattr(model, "_model"):
+                                    # HestonBates wrapper
+                                    model._model.calibrate(train)
+                                    model.params = model._model.params
+                                else:
+                                    model.calibrate(train)
+                            elif m_name in ("Mean Reversion (OU)", "Regime Switching"):
+                                model.calibrate(train)
+                            else:
+                                log_r = np.log(train[1:] / train[:-1])
+                                model.calibrate(log_r)
+
+                        # ── Simulate ──────────────────────────────────────────
+                        if m_name in ("Heston", "Heston + Jumps (Bates)"):
+                            sim = model.simulate(
+                                S0=S0_bt, n_steps=test_window,
+                                n_paths=n_paths_bt, random_seed=42, antithetic=True
+                            )
                         else:
-                            log_r = np.log(train[1:] / train[:-1])
-                            model.calibrate(log_r)
+                            sim = model.simulate(
+                                S0=S0_bt, n_steps=test_window,
+                                n_paths=n_paths_bt, random_seed=42
+                            )
 
-                    sim       = model.simulate(S0=float(train[-1]), n_steps=len(test_prices), n_paths=500, random_seed=42)
-                    predicted = np.median(sim, axis=0)
-                    actual    = test_prices
-                    n         = min(len(predicted), len(actual))
-                    predicted, actual = predicted[:n], actual[:n]
+                        # ── Use MEAN not median — less biased for trending markets ──
+                        predicted = np.mean(sim, axis=0)
+                        actual    = test_prices
+                        n         = min(len(predicted), len(actual))
+                        predicted, actual = predicted[:n], actual[:n]
 
-                    mae      = np.mean(np.abs(predicted - actual))
-                    rmse     = np.sqrt(np.mean((predicted - actual) ** 2))
-                    mape     = np.mean(np.abs((predicted - actual) / actual)) * 100
-                    dir_acc  = np.mean(np.sign(np.diff(actual)) == np.sign(np.diff(predicted))) * 100
+                        mae     = np.mean(np.abs(predicted - actual))
+                        rmse    = np.sqrt(np.mean((predicted - actual) ** 2))
+                        mape    = np.mean(np.abs((predicted - actual) / actual)) * 100
+                        dir_acc = np.mean(
+                            np.sign(np.diff(actual)) == np.sign(np.diff(predicted))
+                        ) * 100
 
-                    results.append({
-                        "Model":             m_name,
-                        "MAE ($)":           round(mae,     2),
-                        "RMSE ($)":          round(rmse,    2),
-                        "MAPE (%)":          round(mape,    2),
-                        "Dir. Accuracy (%)": round(dir_acc, 1),
-                    })
-                except Exception:
-                    pass
+                        # Feller ratio for Heston models
+                        feller = "—"
+                        if m_name in ("Heston", "Heston + Jumps (Bates)"):
+                            try:
+                                p = model.params if hasattr(model, "params") else model._model.params
+                                feller = f"{p.feller_ratio():.2f}"
+                            except Exception:
+                                pass
+
+                        results.append({
+                            "Model":             m_name,
+                            "MAE ($)":           round(mae,     2),
+                            "RMSE ($)":          round(rmse,    2),
+                            "MAPE (%)":          round(mape,    2),
+                            "Dir. Accuracy (%)": round(dir_acc, 1),
+                            "Feller":            feller,
+                        })
+                    except Exception as e:
+                        results.append({
+                            "Model":             m_name,
+                            "MAE ($)":           None,
+                            "RMSE ($)":          None,
+                            "MAPE (%)":          None,
+                            "Dir. Accuracy (%)": None,
+                            "Feller":            f"ERROR: {e}",
+                        })
+
+                st.session_state["bt_results"]     = results
+                st.session_state["bt_test_window"] = test_window
+
+        results = st.session_state.get("bt_results", [])
 
         if results:
-            df_err = pd.DataFrame(results).sort_values("MAE ($)")
+            df_err = pd.DataFrame(results)
+            df_err = df_err.dropna(subset=["MAE ($)"]).sort_values("MAE ($)")
             best   = df_err.iloc[0]["Model"]
-            st.success(f"🏆 Best model by MAE: **{best}**")
+
+            st.success(f"🏆 Best model by MAE: **{best}**  "
+                       f"(test window: {st.session_state.get('bt_test_window', '?')} days)")
             st.dataframe(df_err, use_container_width=True, hide_index=True)
 
+            # MAE vs RMSE chart
             fig_err = go.Figure()
             for metric, color in [("MAE ($)", GOLD), ("RMSE ($)", BLUE)]:
                 fig_err.add_trace(go.Bar(
@@ -1598,6 +1671,7 @@ with tab7:
             )
             st.plotly_chart(fig_err, use_container_width=True)
 
+            # MAPE chart
             fig_mape = go.Figure()
             fig_mape.add_trace(go.Bar(
                 x=df_err["Model"],
@@ -1615,7 +1689,11 @@ with tab7:
             st.plotly_chart(fig_mape, use_container_width=True)
         else:
             st.error("Could not compute errors. Make sure models loaded correctly.")
-
+#====================================================================================
+#tab 8
+#====================================================================================
+with tab8:
+    render_portfolio_tab()
     st.markdown("""
     ### How to Run
 
