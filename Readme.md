@@ -36,7 +36,7 @@ Prices are displayed **per troy ounce**:
 - **Model Comparison** — Leaderboard with statistical significance tests
 - **Caching System** — Parquet/HDF5/CSV/Pickle storage with TTL expiration
 
-### Portfolio Mode (v2.0) — New
+### Portfolio Mode (v1.4.2) — New
 - **Multi-Asset Simulation** — 2–20 correlated assets under a single Monte Carlo framework
 - **Cholesky Correlation** — Correlation injected at every time step (not post-hoc) — the method used by Bloomberg PORT and MSCI RiskMetrics
 - **Ledoit-Wolf Shrinkage** — Mandatory covariance regularization for positive-definite matrices
