@@ -1,0 +1,273 @@
+# 🏦 MARGINS
+**Version 1.3.0**
+
+> Advanced stochastic modeling engine for gold price simulation, risk analysis, and backtesting. Built with 5 mathematical models, a Streamlit dashboard, and a full CLI.
+
+---
+
+## ⚡ Quick Start
+
+### 1. Clone & Install
+
+```bash
+git clone https://github.com/ASAPUI/MARGINS.git
+cd MARGINS
+pip install -r requirements.txt
+```
+
+### 2. Launch the Dashboard
+
+```bash
+streamlit run app.py
+```
+or just double ckick on run.vbs
+Open your browser at `http://localhost:8501`
+
+### 3. Or Use the CLI
+
+```bash
+# Get current gold price
+python cli.py price
+
+# Run a simulation (30 days, OU model, 5000 paths)
+python cli.py simulate --model ou --days 30 --paths 5000
+
+# Deep risk analysis
+python cli.py risk --model merton --days 60 --target 2600
+
+# Backtest multiple models
+python cli.py backtest --models gbm ou merton --period 2y
+
+# Compare all models side by side
+python cli.py compare --days 30 --output results.json
+```
+
+---
+
+## 📦 Requirements
+
+```
+yfinance>=0.2.0
+pandas>=1.5.0
+numpy>=1.24.0
+scipy>=1.10.0
+fredapi>=0.5.0
+pyarrow>=10.0.0  # For Parquet support
+tables>=3.8.0    # For HDF5 support
+torch>=2.0.0
+httpx>=0.27
+cachetools>=5.3
+pydantic>=2.0
+```
+
+Install everything at once:
+
+```bash
+pip install -r requirements.txt
+```
+
+---
+
+## 🧠 The 5 Stochastic Models
+
+### 1. Geometric Brownian Motion (GBM)
+
+```
+dS = μ·S·dt + σ·S·dW
+```
+
+The foundational model. Assumes log-normally distributed returns with constant drift and volatility. Used as a **baseline benchmark**.
+
+### 2. Ornstein-Uhlenbeck — Mean Reversion ⭐ Most important for gold
+
+```
+dS = κ·(θ − S)·dt + σ·dW
+```
+
+Captures gold's documented tendency to revert to long-term equilibrium. `κ` controls the speed of reversion, `θ` is the long-term fair value. **Best for long-term forecasting.**
+
+### 3. Merton Jump Diffusion
+
+```
+dS = μ·S·dt + σ·S·dW + J·S·dN
+```
+
+Extends GBM with a Poisson jump process to model sudden price shocks from geopolitical crises or central bank interventions. **Best for risk analysis and stress testing.**
+
+### 4. Heston Stochastic Volatility
+
+```
+dS = μ·S·dt + √v·S·dW₁
+dv = κ(θ−v)·dt + ξ·√v·dW₂
+```
+
+Models volatility itself as a stochastic process, capturing volatility clustering and the leverage effect. **Best for options pricing and volatility forecasting.**
+
+### 5. Regime Switching (Markov Chain)
+
+```
+dS = μ(sₜ)·S·dt + σ(sₜ)·S·dW
+```
+
+Alternates between distinct market states (calm / crisis) using a Markov chain. Each regime has its own drift and volatility parameters. **Best for scenario planning.**
+
+---
+
+## 🖥️ Dashboard — 4 Tabs
+
+| Tab | Content |
+| --- | --- |
+| 📈 Simulation | Fan chart, confidence bands, scenario table, return distribution |
+| ⚠️ Risk Analysis | VaR/CVaR metrics, drawdown distribution, target price probability |
+| 📊 Market Data | Historical chart, return statistics, rolling volatility |
+| ℹ️ Model Guide | Formula reference, pros/cons for each model |
+
+---
+
+## 💻 CLI Reference
+
+```
+python cli.py <command> [options]
+
+Commands:
+  price      Show current live gold price
+  simulate   Run Monte Carlo simulation
+  risk       Deep risk analysis (VaR, CVaR, drawdowns)
+  backtest   Walk-forward backtest across models
+  compare    Side-by-side model comparison
+
+Common Options:
+  --model   -m    Model: gbm | ou | merton | heston | regime
+  --days    -d    Forecast horizon in trading days (default: 30)
+  --paths   -p    Number of simulation paths (default: 5000)
+  --period        Training data: 6mo | 1y | 2y | 5y (default: 2y)
+  --output  -o    Save results to file (.json or .csv)
+  --seed          Random seed for reproducibility (default: 42)
+```
+
+### Examples
+
+```bash
+# Quick 7-day forecast with GBM
+python cli.py simulate --model gbm --days 7
+
+# 1-year Heston simulation, save results
+python cli.py simulate --model heston --days 252 --paths 10000 --output forecast.json
+
+# Risk analysis with price target
+python cli.py risk --model ou --days 90 --target 2800
+
+# Full backtest — all models — 5 years of data
+python cli.py backtest --models gbm ou merton heston regime --period 5y
+
+# Disable colors (for logging/piping)
+python cli.py --no-color simulate --model ou --days 30
+```
+
+---
+
+## 📊 Risk Metrics Explained
+
+| Metric | Description |
+| --- | --- |
+| **VaR 95%** | Maximum loss expected 95% of the time |
+| **CVaR 95%** | Average loss in the worst 5% of scenarios |
+| **Max Drawdown** | Worst peak-to-trough price drop across all paths |
+| **90% CI** | Range containing 90% of all simulated final prices |
+| **Prob. of Gain** | % of paths where final price > current price |
+| **Realised Vol** | Annualised standard deviation of simulated returns |
+
+---
+
+## 🔬 Backtesting Methodology
+
+The backtester uses **walk-forward analysis** — the industry standard for validating time series models without lookahead bias:
+
+```
+├── Training Window (252 days default)  →  Calibrate model parameters
+├── Test Window    (30 days default)    →  Evaluate out-of-sample predictions
+└── Step forward by test window size    →  Repeat across full history
+```
+
+**Accuracy metrics:**
+
+| Metric | Formula | Target |
+| --- | --- | --- |
+| RMSE | √mean((pred − actual)²) | Lower is better |
+| MAE | mean(\|pred − actual\|) | Lower is better |
+| MAPE | mean(\|error/actual\|) × 100 | < 5% is good |
+| Directional Accuracy | % correct up/down calls | > 55% is good |
+
+---
+
+## 🛠️ Usage as a Python Package
+
+```python
+from src.models import create_model
+from src.data.fetcher import GoldDataFetcher
+from src.data.cleaner import DataCleaner
+
+# Fetch and clean data
+fetcher = GoldDataFetcher()
+raw     = fetcher.fetch_gold_prices('GC=F', period='2y')
+cleaner = DataCleaner()
+prices  = cleaner.clean_price_data(raw)
+
+# Create and calibrate model
+model = create_model('ou', historical_data=prices['close'].values)
+
+# Simulate 10,000 paths for 30 days
+paths = model.simulate(S0=2350.0, n_steps=30, n_paths=10000)
+
+# Results
+import numpy as np
+final_prices = paths[:, -1]
+print(f"Expected price: ${np.mean(final_prices):,.2f}")
+print(f"95% CI: [${np.percentile(final_prices,5):,.2f}, ${np.percentile(final_prices,95):,.2f}]")
+print(f"Prob. of gain:  {np.mean(final_prices > 2350)*100:.1f}%")
+```
+
+---
+
+## 🧪 Running Tests
+
+```bash
+# Run all tests
+pytest tests/
+
+# Run with coverage report
+pytest tests/ --cov=src --cov-report=html
+
+# Run a specific test file
+pytest tests/test_models.py -v
+```
+
+---
+
+## 🗺️ Roadmap
+
+- [x] Add LSTM/neural network model for comparison
+- [x] Integrate FRED API for live macro features
+- [ ] Portfolio mode — simulate multiple assets simultaneously
+- [ ] Add implied volatility surface from gold options data
+- [ ] Deploy dashboard to Streamlit Cloud
+- [ ] Add email/Telegram alerts for price target breaches
+
+---
+
+## 📄 License
+
+BSL License — Free for non-commercial use.
+
+---
+
+## 👤 Author
+
+**Essabri Ali Rayan**
+GitHub: [@ASAPUI](https://github.com/ASAPUI)
+Project: [MARGINS](https://github.com/ASAPUI/MARGINS)
+Contact: +2120694025836 or [alirayanessabri@gmail.com](mailto:alirayanessabri@gmail.com)
+
+---
+
+> _"I don't know exactly what will happen, but if I simulate thousands of possible futures and average them, I'll get a very good estimate."_ — The Monte Carlo philosophy 🎲

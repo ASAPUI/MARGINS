@@ -576,16 +576,33 @@ class MacroBridge:
             return local_brief
         return None
 
-    def get_signals_sync(self) -> MacroSignal:
-        """Thread-safe sync wrapper for Streamlit."""
+    def get_signals_sync(self):
         import concurrent.futures
+
+        def _run():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                return loop.run_until_complete(self.get_signals())
+            finally:
+                loop.close()
+
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-            return pool.submit(asyncio.run, self.get_signals()).result()
+            return pool.submit(_run).result()
 
     def get_brief_sync(self) -> Optional[str]:
         import concurrent.futures
+
+        def _run():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                return loop.run_until_complete(self.get_brief())
+            finally:
+                loop.close()
+
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-            return pool.submit(asyncio.run, self.get_brief()).result()
+            return pool.submit(_run).result()
 
     def is_healthy(self) -> bool:
         # Static baseline always available → never fully unhealthy
