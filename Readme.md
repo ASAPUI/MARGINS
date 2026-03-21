@@ -3,7 +3,7 @@
 > A production-grade stochastic simulation engine for gold price forecasting, risk analysis, and multi-asset portfolio optimization.
 
 **Author:** Essabri Ali Rayan
-**Version:** 1.4.2
+**Version:** 1.4.4
 **License:** BSL
 
 ---
