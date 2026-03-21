@@ -1,16 +1,8 @@
 """
 MARGINS — Portfolio Mode Dashboard Tab
-Phase 5: Streamlit UI for multi-asset portfolio simulation & optimization.
-
-Drop this file into your project root. In your main app.py, add:
-
-    from app_portfolio_tab import render_portfolio_tab
-
-    with tab_portfolio:
-        render_portfolio_tab()
-
-Or run standalone:
     streamlit run app_portfolio_tab.py
+    author : essabri ali rayan
+    version :1.4.4
 """
 
 import streamlit as st
@@ -37,24 +29,30 @@ except ImportError:
 # THEME & STYLE
 # ══════════════════════════════════════════════════════════════════════════════
 
-DARK_BG       = "#0a0e17"
-PANEL_BG      = "#0f1520"
-BORDER        = "#1e2d45"
-ACCENT_GOLD   = "#d4a853"
-ACCENT_BLUE   = "#3b82f6"
-ACCENT_RED    = "#ef4444"
-ACCENT_GREEN  = "#22c55e"
-TEXT_PRIMARY  = "#e8eaf0"
-TEXT_MUTED    = "#6b7a99"
-GRID_COLOR    = "#1a2540"
+DARK_BG       = "#0B0C14"
+PANEL_BG      = "#10121E"
+BORDER        = "#1F2240"
+ACCENT_GOLD   = "#C9A84C"
+ACCENT_BLUE   = "#5599EE"
+ACCENT_RED    = "#EF4444"
+ACCENT_GREEN  = "#22C55E"
+TEXT_PRIMARY  = "#ECEDF5"
+TEXT_MUTED    = "#5A5C78"
+GRID_COLOR    = "#1F2240"
 
 PLOTLY_TEMPLATE = dict(
     layout=dict(
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(color=TEXT_PRIMARY, family="'IBM Plex Mono', monospace"),
-        xaxis=dict(gridcolor=GRID_COLOR, zerolinecolor=GRID_COLOR, linecolor=BORDER),
-        yaxis=dict(gridcolor=GRID_COLOR, zerolinecolor=GRID_COLOR, linecolor=BORDER),
+        paper_bgcolor="#0B0C14",
+        plot_bgcolor="#0B0C14",
+        font=dict(color="#9395B0", family="IBM Plex Mono"),
+        xaxis=dict(
+            gridcolor="#1F2240", zerolinecolor="#1F2240", linecolor="#1F2240",
+            tickfont=dict(color="#9395B0", family="IBM Plex Mono", size=10),
+        ),
+        yaxis=dict(
+            gridcolor="#1F2240", zerolinecolor="#1F2240", linecolor="#1F2240",
+            tickfont=dict(color="#9395B0", family="IBM Plex Mono", size=10),
+        ),
         margin=dict(l=40, r=20, t=40, b=40),
     )
 )
@@ -67,141 +65,219 @@ ASSET_COLORS = [
 
 CUSTOM_CSS = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Playfair+Display:wght@500&family=DM+Sans:wght@400&display=swap');
 
-/* Root overrides */
-[data-testid="stAppViewContainer"] {
-    background: #0a0e17;
-}
+/* ── Base ── */
+[data-testid="stAppViewContainer"] { background: #0B0C14; }
 [data-testid="stSidebar"] {
-    background: #0d1219 !important;
-    border-right: 1px solid #1e2d45;
+    background: #10121E !important;
+    border-right: 1px solid #1F2240 !important;
 }
-[data-testid="stHeader"] { background: transparent; }
+[data-testid="stHeader"] { background: transparent !important; }
 
-/* Typography */
-h1, h2, h3, .margins-title {
+/* ── Typography ── */
+h1, h2, h3, h4, .margins-title {
     font-family: 'IBM Plex Mono', monospace !important;
-    letter-spacing: -0.02em;
+    text-transform: uppercase !important;
+    letter-spacing: 0.18em !important;
+    font-size: 10px !important;
+    font-weight: 400 !important;
+    color: #9395B0 !important;
+    border-bottom: 1px solid #1F2240 !important;
+    padding-bottom: 6px !important;
 }
-p, label, .stMarkdown {
-    font-family: 'IBM Plex Sans', sans-serif !important;
+p, .stMarkdown p {
+    font-family: 'DM Sans', sans-serif !important;
+    color: #9395B0 !important;
+    font-size: 13px !important;
 }
 
-/* Metric cards */
+/* ── Metric cards ── */
 [data-testid="metric-container"] {
-    background: #0f1520 !important;
-    border: 1px solid #1e2d45 !important;
-    border-radius: 4px !important;
-    padding: 12px 16px !important;
+    background: #10121E !important;
+    border: 1px solid #1F2240 !important;
+    border-radius: 0 !important;
+    padding: 16px !important;
 }
 [data-testid="metric-container"] label {
-    color: #6b7a99 !important;
+    color: #5A5C78 !important;
     font-family: 'IBM Plex Mono', monospace !important;
-    font-size: 10px !important;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
+    font-size: 9px !important;
+    font-weight: 400 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.14em !important;
 }
 [data-testid="metric-container"] [data-testid="stMetricValue"] {
     font-family: 'IBM Plex Mono', monospace !important;
     font-size: 22px !important;
-    color: #e8eaf0 !important;
+    font-weight: 500 !important;
+    color: #E8C97A !important;
 }
 [data-testid="metric-container"] [data-testid="stMetricDelta"] {
     font-family: 'IBM Plex Mono', monospace !important;
     font-size: 11px !important;
 }
 
-/* Section headers */
+/* ── Section headers ── */
 .section-header {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    color: #6b7a99;
-    border-bottom: 1px solid #1e2d45;
-    padding-bottom: 6px;
-    margin-bottom: 16px;
-}
-
-/* Panel container */
-.panel {
-    background: #0f1520;
-    border: 1px solid #1e2d45;
-    border-radius: 4px;
-    padding: 20px;
-    margin-bottom: 16px;
-}
-
-/* Weight badge */
-.weight-badge {
-    display: inline-block;
-    background: #1a2540;
-    border: 1px solid #1e2d45;
-    border-radius: 2px;
-    padding: 2px 8px;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 11px;
-    color: #d4a853;
-    letter-spacing: 0.05em;
-}
-
-/* Strategy tag */
-.strategy-tag {
-    display: inline-block;
-    padding: 2px 10px;
-    border-radius: 2px;
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-}
-.tag-sharpe  { background: rgba(212,168,83,0.15);  color: #d4a853; border: 1px solid rgba(212,168,83,0.3);  }
-.tag-cvar    { background: rgba(239,68,68,0.15);   color: #ef4444; border: 1px solid rgba(239,68,68,0.3);   }
-.tag-parity  { background: rgba(59,130,246,0.15);  color: #3b82f6; border: 1px solid rgba(59,130,246,0.3);  }
-
-/* Optimize button */
-.stButton > button {
     font-family: 'IBM Plex Mono', monospace !important;
-    letter-spacing: 0.1em;
-    font-size: 12px;
-    font-weight: 600;
+    font-size: 10px !important;
+    font-weight: 400 !important;
+    letter-spacing: 0.18em !important;
+    text-transform: uppercase !important;
+    color: #9395B0 !important;
+    border-bottom: 1px solid #1F2240 !important;
+    padding-bottom: 6px !important;
+    margin-bottom: 16px !important;
+    position: relative !important;
+}
+.section-header::after {
+    content: '' !important;
+    position: absolute !important;
+    bottom: -1px !important;
+    left: 0 !important;
+    width: 28px !important;
+    height: 1px !important;
+    background: #C9A84C !important;
 }
 
-/* Slider labels */
-.stSlider label {
+/* ── Panel container ── */
+.panel {
+    background: #10121E !important;
+    border: 1px solid #1F2240 !important;
+    border-radius: 0 !important;
+    padding: 20px !important;
+    margin-bottom: 16px !important;
+}
+
+/* ── Weight badge ── */
+.weight-badge {
+    display: inline-block !important;
+    background: #10121E !important;
+    border: 1px solid #1F2240 !important;
+    border-radius: 2px !important;
+    padding: 2px 8px !important;
     font-family: 'IBM Plex Mono', monospace !important;
     font-size: 11px !important;
-    color: #6b7a99 !important;
-    letter-spacing: 0.05em;
+    color: #E8C97A !important;
+    letter-spacing: 0.05em !important;
 }
 
-/* Dataframe */
-[data-testid="stDataFrame"] {
-    font-family: 'IBM Plex Mono', monospace !important;
-}
-
-/* Warning / info */
-[data-testid="stAlert"] {
+/* ── Strategy tags ── */
+.strategy-tag {
+    display: inline-block !important;
+    padding: 2px 10px !important;
     border-radius: 2px !important;
     font-family: 'IBM Plex Mono', monospace !important;
-    font-size: 12px !important;
+    font-size: 10px !important;
+    font-weight: 400 !important;
+    letter-spacing: 0.12em !important;
+    text-transform: uppercase !important;
+}
+.tag-sharpe  { background: rgba(201,168,76,0.10);  color: #C9A84C; border: 1px solid rgba(201,168,76,0.25); }
+.tag-cvar    { background: rgba(239,68,68,0.10);   color: #EF4444; border: 1px solid rgba(239,68,68,0.25); }
+.tag-parity  { background: rgba(85,153,238,0.10);  color: #5599EE; border: 1px solid rgba(85,153,238,0.25); }
+
+/* ── Buttons ── */
+.stButton > button {
+    font-family: 'IBM Plex Mono', monospace !important;
+    font-size: 11px !important;
+    font-weight: 500 !important;
+    letter-spacing: 0.12em !important;
+    text-transform: uppercase !important;
+    background: linear-gradient(135deg, #C9A84C, #E8C97A) !important;
+    color: #0B0C14 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 0.55rem 1.5rem !important;
+}
+.stButton > button:hover { opacity: 0.88 !important; }
+
+/* ── Slider labels ── */
+.stSlider label {
+    font-family: 'IBM Plex Mono', monospace !important;
+    font-size: 9px !important;
+    color: #5A5C78 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.12em !important;
 }
 
-/* Tab styling */
+/* ── DataFrames ── */
+[data-testid="stDataFrame"] {
+    font-family: 'IBM Plex Mono', monospace !important;
+    font-size: 12px !important;
+    border: 1px solid #1F2240 !important;
+    border-radius: 0 !important;
+}
+[data-testid="stDataFrame"] th {
+    background: #10121E !important;
+    font-family: 'IBM Plex Mono', monospace !important;
+    font-size: 9px !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.14em !important;
+    color: #5A5C78 !important;
+    border-bottom: 1px solid #1F2240 !important;
+}
+[data-testid="stDataFrame"] td {
+    font-family: 'IBM Plex Mono', monospace !important;
+    font-size: 12px !important;
+    border-color: #1F2240 !important;
+}
+
+/* ── Alerts ── */
+[data-testid="stAlert"] {
+    border-radius: 0 !important;
+    font-family: 'IBM Plex Mono', monospace !important;
+    font-size: 11px !important;
+    border: 1px solid #1F2240 !important;
+}
+
+/* ── Tabs ── */
 [data-baseweb="tab-list"] {
-    gap: 0px;
-    border-bottom: 1px solid #1e2d45;
+    gap: 0 !important;
+    border-bottom: 1px solid #1F2240 !important;
+    background: transparent !important;
 }
 [data-baseweb="tab"] {
     font-family: 'IBM Plex Mono', monospace !important;
     font-size: 11px !important;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
+    font-weight: 400 !important;
+    letter-spacing: 0.16em !important;
+    text-transform: uppercase !important;
+    color: #9395B0 !important;
     padding: 8px 20px !important;
+    background: transparent !important;
+    border: none !important;
 }
+[aria-selected="true"] {
+    color: #ECEDF5 !important;
+    border-bottom: 2px solid #C9A84C !important;
+    background: transparent !important;
+}
+
+/* ── Inputs / selects ── */
+div[data-baseweb="select"] > div {
+    background: #10121E !important;
+    border: 1px solid #1F2240 !important;
+    border-radius: 0 !important;
+    font-family: 'IBM Plex Mono', monospace !important;
+    font-size: 12px !important;
+    color: #ECEDF5 !important;
+}
+div[data-baseweb="select"] > div:focus-within { border-color: #C9A84C !important; }
+.stNumberInput input, .stTextInput input {
+    background: #10121E !important;
+    border: 1px solid #1F2240 !important;
+    border-radius: 0 !important;
+    color: #ECEDF5 !important;
+    font-family: 'IBM Plex Mono', monospace !important;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: #0B0C14; }
+::-webkit-scrollbar-thumb { background: #1F2240; border-radius: 0; }
+::-webkit-scrollbar-thumb:hover { background: #2E3160; }
 </style>
 """
 
@@ -349,9 +425,9 @@ def build_correlation_heatmap(log_ret_df):
     z = corr.values
 
     colorscale = [
-        [0.0,  "#ef4444"],
-        [0.5,  "#0f1520"],
-        [1.0,  "#d4a853"],
+        [0.0,  "#EF4444"],
+        [0.5,  "#10121E"],
+        [1.0,  "#C9A84C"],
     ]
 
     fig = go.Figure(go.Heatmap(
@@ -523,22 +599,25 @@ def render_portfolio_tab():
     col_title, col_badge = st.columns([6, 1])
     with col_title:
         st.markdown(
-            "<h2 style='font-family:IBM Plex Mono;color:#e8eaf0;"
-            "letter-spacing:-0.03em;margin-bottom:2px;'>MARGINS"
-            "<span style='color:#d4a853;'>∷</span> Portfolio Mode</h2>"
-            "<p style='color:#6b7a99;font-family:IBM Plex Sans;font-size:13px;"
-            "margin-top:0;'>Multi-Asset Monte Carlo Simulator — Phase 5 Dashboard</p>",
+            "<div style='font-family:\"Playfair Display\",serif;font-size:1.6rem;"
+            "font-weight:500;color:#ECEDF5;margin-bottom:2px;'>"
+            "MARGINS <span style='color:#C9A84C;font-size:1rem;'>∷</span>"
+            " Portfolio Mode</div>"
+            "<p style='font-family:\"DM Sans\",sans-serif;font-size:13px;"
+            "color:#9395B0;margin-top:2px;'>"
+            "Multi-Asset Monte Carlo Simulator — Phase 5 Dashboard</p>",
             unsafe_allow_html=True,
         )
     with col_badge:
         st.markdown(
-            "<div style='text-align:right;padding-top:12px;'>"
-            "<span style='font-family:IBM Plex Mono;font-size:10px;"
-            "color:#d4a853;letter-spacing:0.12em;'>v2.0</span></div>",
+            "<div style='text-align:right;padding-top:14px;'>"
+            "<span style='font-family:\"IBM Plex Mono\",monospace;font-size:9px;"
+            "text-transform:uppercase;letter-spacing:0.14em;color:#C9A84C;'>"
+            "v2.0</span></div>",
             unsafe_allow_html=True,
         )
 
-    st.markdown("<hr style='border-color:#1e2d45;margin:4px 0 24px;'>", unsafe_allow_html=True)
+    st.markdown("<hr style='border-color:#1F2240;margin:4px 0 20px;'>", unsafe_allow_html=True)
 
     # ═══════════════════════════════════════════════════════════════════════════
     # SIDEBAR — Controls
@@ -578,7 +657,7 @@ def render_portfolio_tab():
             st.error("Select at least 2 assets.")
             return
 
-        st.markdown("<hr style='border-color:#1e2d45;'>", unsafe_allow_html=True)
+        st.markdown("<hr style='border-color:#1F2240;'>", unsafe_allow_html=True)
         st.markdown("<p class='section-header'>Weights</p>", unsafe_allow_html=True)
 
         weight_mode = st.radio(
@@ -591,9 +670,9 @@ def render_portfolio_tab():
         if weight_mode == "Equal weight":
             raw_weights = [1.0 / len(tickers)] * len(tickers)
             st.markdown(
-                f"<div style='color:#6b7a99;font-family:IBM Plex Mono;font-size:11px;"
+                f"<div style='color:#9395B0;font-family:\"IBM Plex Mono\",monospace;font-size:11px;"
                 f"margin-top:4px;'>Each asset: "
-                f"<span style='color:#d4a853;'>{100/len(tickers):.1f}%</span></div>",
+                f"<span style='color:#C9A84C;'>{100/len(tickers):.1f}%</span></div>",
                 unsafe_allow_html=True,
             )
         else:
@@ -613,7 +692,7 @@ def render_portfolio_tab():
             total = sum(raw_weights)
             if abs(total - 100) > 0.5:
                 st.markdown(
-                    f"<div style='color:#f97316;font-family:IBM Plex Mono;"
+                    f"<div style='color:#EF4444;font-family:\"IBM Plex Mono\",monospace;"
                     f"font-size:11px;margin:4px 0;'>Σ = {total:.0f}% "
                     f"— will auto-normalize to 100%</div>",
                     unsafe_allow_html=True,
@@ -622,7 +701,7 @@ def render_portfolio_tab():
         weights = np.array(raw_weights, dtype=float)
         weights = weights / weights.sum()
 
-        st.markdown("<hr style='border-color:#1e2d45;'>", unsafe_allow_html=True)
+        st.markdown("<hr style='border-color:#1F2240;'>", unsafe_allow_html=True)
         st.markdown("<p class='section-header'>Simulation</p>", unsafe_allow_html=True)
 
         n_paths = st.select_slider(
@@ -646,7 +725,7 @@ def render_portfolio_tab():
             index=2,
         )
 
-        st.markdown("<hr style='border-color:#1e2d45;'>", unsafe_allow_html=True)
+        st.markdown("<hr style='border-color:#1F2240;'>", unsafe_allow_html=True)
 
         run_btn = st.button(
             "▶  RUN SIMULATION",
@@ -814,13 +893,15 @@ def render_portfolio_tab():
     res = st.session_state.portfolio_results
 
     if res is None:
-        # Empty state
         st.markdown(
-            "<div style='text-align:center;padding:80px 0;'>"
-            "<p style='font-family:IBM Plex Mono;font-size:13px;color:#2a3a5c;"
-            "letter-spacing:0.15em;'>SELECT ASSETS · CONFIGURE · RUN SIMULATION</p>"
-            "<p style='font-family:IBM Plex Mono;font-size:10px;color:#1a2540;"
-            "margin-top:8px;'>Cholesky-correlated Monte Carlo · Ledoit-Wolf shrinkage · "
+            "<div style='text-align:center;padding:80px 0;border:1px solid #1F2240;"
+            "background:#10121E;'>"
+            "<p style='font-family:\"IBM Plex Mono\",monospace;font-size:11px;"
+            "color:#5A5C78;letter-spacing:0.18em;text-transform:uppercase;'>"
+            "Select Assets · Configure · Run Simulation</p>"
+            "<p style='font-family:\"IBM Plex Mono\",monospace;font-size:9px;"
+            "color:#2E3160;margin-top:8px;letter-spacing:0.12em;'>"
+            "Cholesky-correlated Monte Carlo · Ledoit-Wolf shrinkage · "
             "Markowitz optimization</p></div>",
             unsafe_allow_html=True,
         )
@@ -836,7 +917,7 @@ def render_portfolio_tab():
     S0_vec     = res["S0_vec"]
 
     # ── Tab layout ─────────────────────────────────────────────────────────────
-    tabs = st.tabs(["📊 Overview", "📈 Paths", "🔗 Correlation", "🔬 Per Asset", "⚙  Optimizer"])
+    tabs = st.tabs(["Overview", "Paths", "Correlation", "Per Asset", "Optimizer"])
 
     # ── Tab 1: Overview ────────────────────────────────────────────────────────
     with tabs[0]:
@@ -994,8 +1075,8 @@ def render_portfolio_tab():
         st.dataframe(corr, use_container_width=True)
 
         st.markdown(
-            "<p style='font-family:IBM Plex Mono;font-size:10px;color:#2a3a5c;"
-            "margin-top:8px;'>Estimated on annualized log-returns · "
+            "<p style='font-family:\"IBM Plex Mono\",monospace;font-size:9px;color:#5A5C78;"
+            "margin-top:8px;letter-spacing:0.08em;'>Estimated on annualized log-returns · "
             f"Ledoit-Wolf shrinkage · {calib_window}-day calibration window</p>",
             unsafe_allow_html=True,
         )
@@ -1036,9 +1117,11 @@ def render_portfolio_tab():
 
         if opt_res is None:
             st.markdown(
-                "<div style='text-align:center;padding:60px 0;'>"
-                "<p style='font-family:IBM Plex Mono;font-size:12px;color:#2a3a5c;"
-                "letter-spacing:0.15em;'>RUN SIMULATION FIRST · THEN CLICK ◆ OPTIMIZE WEIGHTS</p></div>",
+                "<div style='text-align:center;padding:60px 0;border:1px solid #1F2240;"
+                "background:#10121E;'>"
+                "<p style='font-family:\"IBM Plex Mono\",monospace;font-size:11px;"
+                "color:#5A5C78;letter-spacing:0.18em;text-transform:uppercase;'>"
+                "Run Simulation First · Then Click ◆ Optimize Weights</p></div>",
                 unsafe_allow_html=True,
             )
         else:
@@ -1094,9 +1177,10 @@ def render_portfolio_tab():
                     )
 
             st.markdown(
-                "<p style='font-family:IBM Plex Mono;font-size:10px;color:#2a3a5c;"
-                "margin-top:12px;'>Weight bounds: [1%, 40%] · "
-                "Max Sharpe & Min CVaR via SLSQP · Risk Parity analytic (1/σᵢ)</p>",
+                "<p style='font-family:\"IBM Plex Mono\",monospace;font-size:9px;"
+                "color:#5A5C78;margin-top:12px;letter-spacing:0.08em;'>"
+                "Weight bounds: [1%, 40%] · "
+                "Max Sharpe &amp; Min CVaR via SLSQP · Risk Parity analytic (1/σᵢ)</p>",
                 unsafe_allow_html=True,
             )
 

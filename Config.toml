@@ -1,0 +1,11 @@
+[theme]
+base                     = "dark"
+primaryColor             = "#C9A84C"
+backgroundColor          = "#0B0C14"
+secondaryBackgroundColor = "#10121E"
+textColor                = "#ECEDF5"
+borderColor              = "#1F2240"
+borderRadius             = "0px"
+font        = "IBM Plex Mono:https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap"
+headingFont = "Playfair Display:https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&display=swap"
+codeFont    = "IBM Plex Mono:https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap"

@@ -98,100 +98,319 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── Custom CSS ──────────────────────────────────────────────────────────────
+# ── Custom CSS — Bloomberg Terminal × MARGINS ────────────────────────────────
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@300;400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Playfair+Display:wght@500&family=DM+Sans:wght@400&display=swap');
 
-    :root {
-        --gold:    #C9A84C;
-        --gold2:   #E8C97A;
-        --dark:    #0D0D14;
-        --panel:   #13131F;
-        --border:  #2A2A3D;
-        --text:    #E8E8F0;
-        --muted:   #8888AA;
-    }
+/* ── Design tokens ── */
+:root {
+    --bg-base:       #0B0C14;
+    --bg-panel:      #10121E;
+    --border:        #1F2240;
+    --border-hover:  #2E3160;
+    --gold:          #C9A84C;
+    --gold-light:    #E8C97A;
+    --gold-hover:    rgba(201,168,76,0.10);
+    --text-primary:  #ECEDF5;
+    --text-secondary:#9395B0;
+    --text-muted:    #5A5C78;
+    --up:            #22C55E;
+    --down:          #EF4444;
+}
 
-    html, body, [class*="css"] {
-        font-family: 'DM Sans', sans-serif;
-        background-color: var(--dark);
-        color: var(--text);
-    }
+/* ── Base ── */
+html, body, .stApp, [class*="css"] {
+    background-color: var(--bg-base) !important;
+    color: var(--text-primary) !important;
+    font-family: 'IBM Plex Mono', monospace !important;
+}
+.stApp { background-color: var(--bg-base) !important; }
+[data-testid="stAppViewContainer"] { background-color: var(--bg-base) !important; }
+[data-testid="stHeader"] { background: transparent !important; }
 
-    h1, h2, h3 { font-family: 'Playfair Display', serif; color: var(--gold); }
+/* ── Typography hierarchy ── */
+/* h1 — page title: Playfair Display */
+h1 {
+    font-family: 'Playfair Display', serif !important;
+    color: var(--text-primary) !important;
+    font-weight: 500 !important;
+}
+/* h2/h3 — section headers: IBM Plex Mono uppercase */
+h2, h3, h4 {
+    font-family: 'IBM Plex Mono', monospace !important;
+    color: var(--text-secondary) !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.18em !important;
+    font-size: 10px !important;
+    font-weight: 400 !important;
+    border-bottom: 1px solid var(--border) !important;
+    padding-bottom: 6px !important;
+    margin-bottom: 12px !important;
+}
+/* Description text: DM Sans */
+p, .stMarkdown p {
+    font-family: 'DM Sans', sans-serif !important;
+    color: var(--text-secondary) !important;
+    font-size: 13px !important;
+}
 
-    section[data-testid="stSidebar"] {
-        background: var(--panel);
-        border-right: 1px solid var(--border);
-    }
+/* ── Sidebar ── */
+section[data-testid="stSidebar"] {
+    background: var(--bg-panel) !important;
+    border-right: 1px solid var(--border) !important;
+}
+section[data-testid="stSidebar"] * {
+    font-family: 'IBM Plex Mono', monospace !important;
+}
+section[data-testid="stSidebar"] hr {
+    border-color: var(--border) !important;
+    margin: 12px 0 !important;
+}
 
-    div[data-testid="metric-container"] {
-        background: var(--panel);
-        border: 1px solid var(--border);
-        border-radius: 10px;
-        padding: 16px;
-    }
-    div[data-testid="metric-container"] label {
-        color: var(--muted) !important;
-        font-size: 0.75rem !important;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-    }
-    div[data-testid="metric-container"] div[data-testid="stMetricValue"] {
-        color: var(--gold2) !important;
-        font-size: 1.6rem !important;
-        font-weight: 600;
-    }
+/* ── Metric cards ── */
+div[data-testid="metric-container"] {
+    background: var(--bg-panel) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 0 !important;
+    padding: 16px !important;
+}
+div[data-testid="metric-container"] label,
+div[data-testid="metric-container"] [data-testid="stMetricLabel"] {
+    font-family: 'IBM Plex Mono', monospace !important;
+    font-size: 9px !important;
+    font-weight: 400 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.14em !important;
+    color: var(--text-muted) !important;
+}
+div[data-testid="metric-container"] [data-testid="stMetricValue"],
+div[data-testid="metric-container"] div[data-testid="stMetricValue"] {
+    font-family: 'IBM Plex Mono', monospace !important;
+    font-size: 22px !important;
+    font-weight: 500 !important;
+    color: var(--gold-light) !important;
+}
+div[data-testid="metric-container"] [data-testid="stMetricDelta"] {
+    font-family: 'IBM Plex Mono', monospace !important;
+    font-size: 11px !important;
+}
 
-    .stButton > button {
-        background: linear-gradient(135deg, var(--gold), #8B6914);
-        color: #0D0D14;
-        font-weight: 600;
-        border: none;
-        border-radius: 8px;
-        padding: 0.6rem 2rem;
-        font-family: 'DM Sans', sans-serif;
-        letter-spacing: 0.04em;
-        transition: opacity 0.2s;
-    }
-    .stButton > button:hover { opacity: 0.85; }
+/* ── Tabs ── */
+.stTabs [data-baseweb="tab-list"] {
+    background: transparent !important;
+    border-bottom: 1px solid var(--border) !important;
+    gap: 0 !important;
+}
+.stTabs [data-baseweb="tab"] {
+    font-family: 'IBM Plex Mono', monospace !important;
+    font-size: 11px !important;
+    font-weight: 400 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.16em !important;
+    color: var(--text-secondary) !important;
+    background: transparent !important;
+    border: none !important;
+    padding: 8px 20px !important;
+}
+.stTabs [aria-selected="true"] {
+    color: var(--text-primary) !important;
+    border-bottom: 2px solid var(--gold) !important;
+    background: transparent !important;
+}
+.stTabs [data-baseweb="tab"]:hover {
+    color: var(--text-primary) !important;
+    background: var(--gold-hover) !important;
+}
 
-    .stTabs [data-baseweb="tab-list"] {
-        background: var(--panel);
-        border-bottom: 1px solid var(--border);
-    }
-    .stTabs [data-baseweb="tab"] {
-        color: var(--muted);
-        font-family: 'DM Sans', sans-serif;
-        font-size: 0.85rem;
-        letter-spacing: 0.05em;
-    }
-    .stTabs [aria-selected="true"] {
-        color: var(--gold) !important;
-        border-bottom: 2px solid var(--gold) !important;
-    }
+/* ── Buttons — primary ── */
+.stButton > button {
+    background: linear-gradient(135deg, #C9A84C, #E8C97A) !important;
+    color: #0B0C14 !important;
+    font-family: 'IBM Plex Mono', monospace !important;
+    font-size: 11px !important;
+    font-weight: 500 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.12em !important;
+    border: none !important;
+    border-radius: 0 !important;
+    padding: 0.55rem 1.5rem !important;
+    transition: opacity 0.15s !important;
+}
+.stButton > button:hover { opacity: 0.88 !important; }
+.stButton > button[kind="secondary"] {
+    background: transparent !important;
+    color: var(--text-secondary) !important;
+    border: 1px solid var(--border) !important;
+}
+.stButton > button[kind="secondary"]:hover {
+    border-color: var(--border-hover) !important;
+    color: var(--text-primary) !important;
+}
 
-    label[data-testid="stWidgetLabel"] { color: var(--muted) !important; font-size: 0.78rem; }
+/* ── Inputs / selects / sliders ── */
+.stSelectbox > div > div,
+.stMultiSelect > div > div,
+div[data-baseweb="select"] > div {
+    background: var(--bg-panel) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 0 !important;
+    color: var(--text-primary) !important;
+    font-family: 'IBM Plex Mono', monospace !important;
+    font-size: 12px !important;
+}
+div[data-baseweb="select"] > div:focus-within {
+    border-color: var(--gold) !important;
+}
+.stNumberInput > div > div > input,
+.stTextInput > div > div > input {
+    background: var(--bg-panel) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 0 !important;
+    color: var(--text-primary) !important;
+    font-family: 'IBM Plex Mono', monospace !important;
+    font-size: 12px !important;
+}
+.stNumberInput > div > div > input:focus,
+.stTextInput > div > div > input:focus {
+    border-color: var(--gold) !important;
+    box-shadow: none !important;
+}
 
-    hr { border-color: var(--border); }
+/* Widget labels */
+label[data-testid="stWidgetLabel"],
+.stSlider label,
+.stSelectbox label,
+.stCheckbox label {
+    font-family: 'IBM Plex Mono', monospace !important;
+    font-size: 9px !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.12em !important;
+    color: var(--text-muted) !important;
+}
 
-    .gold-box {
-        background: rgba(201,168,76,0.08);
-        border: 1px solid rgba(201,168,76,0.3);
-        border-radius: 10px;
-        padding: 16px 20px;
-        margin: 12px 0;
-    }
-    .stat-row { display: flex; gap: 12px; flex-wrap: wrap; margin: 8px 0; }
-    .stat-pill {
-        background: var(--panel);
-        border: 1px solid var(--border);
-        border-radius: 20px;
-        padding: 4px 14px;
-        font-size: 0.8rem;
-        color: var(--gold2);
-    }
+/* Slider track */
+.stSlider [data-baseweb="slider"] [role="slider"] {
+    background: var(--gold) !important;
+    border-color: var(--gold) !important;
+}
+.stSlider [data-baseweb="slider"] div[class*="Track"] {
+    background: var(--border) !important;
+}
+
+/* ── Expanders ── */
+.stExpander {
+    background: var(--bg-panel) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 0 !important;
+}
+.stExpander summary {
+    font-family: 'IBM Plex Mono', monospace !important;
+    font-size: 11px !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.12em !important;
+    color: var(--text-secondary) !important;
+}
+
+/* ── DataFrames / tables ── */
+[data-testid="stDataFrame"] {
+    font-family: 'IBM Plex Mono', monospace !important;
+    font-size: 12px !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 0 !important;
+}
+[data-testid="stDataFrame"] th {
+    background: var(--bg-panel) !important;
+    font-family: 'IBM Plex Mono', monospace !important;
+    font-size: 9px !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.14em !important;
+    color: var(--text-muted) !important;
+    border-bottom: 1px solid var(--border) !important;
+}
+[data-testid="stDataFrame"] td {
+    font-family: 'IBM Plex Mono', monospace !important;
+    font-size: 12px !important;
+    border-color: var(--border) !important;
+}
+
+/* ── Alerts / info boxes ── */
+[data-testid="stAlert"] {
+    border-radius: 0 !important;
+    font-family: 'IBM Plex Mono', monospace !important;
+    font-size: 11px !important;
+    border: 1px solid var(--border) !important;
+}
+
+/* ── Dividers ── */
+hr { border-color: var(--border) !important; }
+
+/* ── Custom utility classes ── */
+/* Gold-box: used in target analysis */
+.gold-box {
+    background: rgba(201,168,76,0.06) !important;
+    border: 1px solid rgba(201,168,76,0.25) !important;
+    border-radius: 0 !important;
+    padding: 16px 20px !important;
+    margin: 12px 0 !important;
+    font-family: 'IBM Plex Mono', monospace !important;
+}
+.gold-box b { color: var(--text-secondary) !important; font-size: 9px !important; text-transform: uppercase !important; letter-spacing: 0.12em !important; }
+
+/* Stat pills */
+.stat-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+.stat-pill {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 2px 10px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    color: var(--gold-light);
+    letter-spacing: 0.05em;
+}
+
+/* Section header accent line */
+.margins-section {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    font-weight: 400;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 6px;
+    margin: 20px 0 14px 0;
+    position: relative;
+}
+.margins-section::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    width: 32px;
+    height: 1px;
+    background: var(--gold);
+}
+
+/* Sidebar brand */
+.margins-brand {
+    font-family: 'Playfair Display', serif !important;
+    font-size: 22px !important;
+    font-weight: 500 !important;
+    color: var(--gold) !important;
+    letter-spacing: 0.04em !important;
+    line-height: 1.2 !important;
+}
+
+/* Spinner / progress */
+[data-testid="stSpinner"] { color: var(--gold) !important; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: var(--bg-base); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 0; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-hover); }
 </style>
 """, unsafe_allow_html=True)
 
@@ -201,18 +420,20 @@ logging.basicConfig(level=logging.WARNING)
 # ── Colour / layout constants (must come BEFORE plotting helpers) ────────────
 # FIX 5: moved these up so helper functions can reference them at definition time.
 DARK_LAYOUT = dict(
-    paper_bgcolor="rgba(0,0,0,0)",
-    plot_bgcolor="rgba(0,0,0,0)",
-    font=dict(color="#E8E8F0", family="DM Sans"),
-    xaxis=dict(gridcolor="#1E1E2E", showgrid=True, zeroline=False),
-    yaxis=dict(gridcolor="#1E1E2E", showgrid=True, zeroline=False),
+    paper_bgcolor="#0B0C14",
+    plot_bgcolor="#0B0C14",
+    font=dict(color="#9395B0", family="IBM Plex Mono"),
+    xaxis=dict(gridcolor="#1F2240", showgrid=True, zeroline=False,
+               tickfont=dict(color="#9395B0", family="IBM Plex Mono", size=10)),
+    yaxis=dict(gridcolor="#1F2240", showgrid=True, zeroline=False,
+               tickfont=dict(color="#9395B0", family="IBM Plex Mono", size=10)),
     margin=dict(l=40, r=20, t=40, b=40),
 )
 
 GOLD  = "#C9A84C"
 GOLD2 = "#E8C97A"
-RED   = "#E05555"
-GREEN = "#4CAF50"
+RED   = "#EF4444"
+GREEN = "#22C55E"
 BLUE  = "#5599EE"
 
 # ── Model Imports (graceful fallbacks) ──────────────────────────────────────
@@ -720,7 +941,7 @@ def render_macro_tab():
         )
         return
 
-    st.header("🌍 Macro Intelligence (WorldMonitor)")
+    st.markdown("<p class='margins-section'>Macro Intelligence — WorldMonitor</p>", unsafe_allow_html=True)
 
     if "macro_bridge" not in st.session_state:
         st.session_state.macro_bridge  = MacroBridge()
@@ -755,23 +976,30 @@ def render_macro_tab():
         return
 
     risk_color = {
-        "stable":   "green",
-        "elevated": "blue",
-        "high":     "orange",
-        "critical": "red",
-        "extreme":  "darkred",
-    }.get(signals.risk_tier.value, "gray")
+        "stable":   "#22C55E",
+        "elevated": "#E8C97A",
+        "high":     "#EF4444",
+        "critical": "#EF4444",
+        "extreme":  "#EF4444",
+    }.get(signals.risk_tier.value, "#9395B0")
 
     st.markdown(f"""
-    <div style='padding:1rem;border-radius:0.5rem;background-color:{risk_color}20;
-                border-left:5px solid {risk_color};'>
-        <h4 style='margin:0;color:{risk_color};'>
-            Risk Level: {signals.risk_tier.value.upper()}
-            {'⚠️ (Fallback Mode)' if signals.is_fallback else ''}
-        </h4>
-        <p style='margin:0.5rem 0 0 0;font-size:0.9rem;'>
+    <div style='padding:12px 16px;background:#10121E;
+                border:1px solid #1F2240;border-left:2px solid {risk_color};
+                margin-bottom:12px;'>
+        <div style='font-family:"IBM Plex Mono",monospace;font-size:9px;
+                    text-transform:uppercase;letter-spacing:0.14em;color:#5A5C78;'>
+            Geopolitical Risk Level
+        </div>
+        <div style='font-family:"IBM Plex Mono",monospace;font-size:18px;
+                    font-weight:500;color:{risk_color};margin-top:4px;'>
+            {signals.risk_tier.value.upper()}
+            {'  ·  FALLBACK MODE' if signals.is_fallback else ''}
+        </div>
+        <div style='font-family:"IBM Plex Mono",monospace;font-size:9px;
+                    color:#5A5C78;margin-top:4px;'>
             Last updated: {signals.fetched_at.strftime('%Y-%m-%d %H:%M UTC')}
-        </p>
+        </div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -784,7 +1012,7 @@ def render_macro_tab():
               delta=f"{signals.critical_anomaly_count}" if signals.critical_anomaly_count > 0 else None,
               delta_color="inverse")
 
-    st.subheader("Country Instability Index (Top 10)")
+    st.markdown("<p class='margins-section'>Country Instability Index — Top 10</p>", unsafe_allow_html=True)
     if signals.cii_scores:
         df = pd.DataFrame([
             {
@@ -797,7 +1025,7 @@ def render_macro_tab():
         st.dataframe(df, use_container_width=True, hide_index=True)
 
     if signals.anomaly_zscores:
-        st.subheader("Live Anomaly Feed")
+        st.markdown("<p class='margins-section'>Live Anomaly Feed</p>", unsafe_allow_html=True)
         for anomaly in signals.anomaly_zscores[:5]:
             emoji = "🔴" if anomaly.z_score >= 3.0 else "🟠" if anomaly.z_score >= 2.0 else "🟡"
             with st.expander(f"{emoji} {anomaly.region} | {anomaly.event_type} (z={anomaly.z_score:.2f})"):
@@ -808,7 +1036,7 @@ def render_macro_tab():
                 if anomaly.metadata:
                     st.json(anomaly.metadata)
 
-    st.subheader("AI World Brief")
+    st.markdown("<p class='margins-section'>AI World Brief</p>", unsafe_allow_html=True)
     brief_text = None
     if signals.brief_text:
         brief_text = signals.brief_text
@@ -817,21 +1045,23 @@ def render_macro_tab():
 
     if brief_text:
         st.markdown(f"""
-        <div style='background-color:#1a1a2e;padding:1.2rem;border-radius:0.5rem;
-                    border-left:4px solid #C9A84C;font-size:0.92rem;line-height:1.7;
-                    color:#E8E8F0;'>
+        <div style='background:#10121E;padding:16px 20px;
+                    border:1px solid #1F2240;border-left:2px solid #C9A84C;
+                    font-family:"DM Sans",sans-serif;font-size:13px;
+                    line-height:1.7;color:#ECEDF5;'>
             {brief_text}
         </div>
         """, unsafe_allow_html=True)
     else:
         st.markdown(
-            "<div style='color:#8888AA;font-style:italic;padding:0.5rem;'>"
+            "<div style='font-family:\"IBM Plex Mono\",monospace;font-size:10px;"
+            "color:#5A5C78;padding:8px 0;'>"
             "Click Refresh Signals to generate world brief.</div>",
             unsafe_allow_html=True,
         )
 
     if "last_params" in st.session_state:
-        st.subheader("Applied Parameter Adjustments")
+        st.markdown("<p class='margins-section'>Applied Parameter Adjustments</p>", unsafe_allow_html=True)
         st.json(st.session_state.last_params.to_dict())
 
 
@@ -839,7 +1069,13 @@ def render_macro_tab():
 # SIDEBAR
 # ══════════════════════════════════════════════════════════════════════════════
 with st.sidebar:
-    st.markdown("## 🥇 Gold Predictor")
+    st.markdown(
+        "<div class='margins-brand'>MARGINS</div>"
+        "<div style='font-family:\"IBM Plex Mono\",monospace;font-size:9px;"
+        "text-transform:uppercase;letter-spacing:0.16em;color:#5A5C78;"
+        "margin-top:4px;margin-bottom:12px;'>Monte Carlo Gold Predictor</div>",
+        unsafe_allow_html=True,
+    )
     st.markdown("<hr>", unsafe_allow_html=True)
 
     REFRESH_MS = 5 * 60 * 1000
@@ -890,39 +1126,40 @@ with st.sidebar:
     current_price, price_change = get_current_price()
     now_str = dt_datetime.now().strftime("%H:%M:%S")
 
-    delta_color = GREEN if price_change >= 0 else RED
+    delta_color = "#22C55E" if price_change >= 0 else "#EF4444"
     st.markdown(
-        f"**Current Gold Price**  \n"
-        f"<span style='font-size:1.5rem;font-weight:700;color:{GOLD2}'>"
-        f"${current_price:,.2f}</span>  "
-        f"<span style='color:{delta_color};font-size:0.85rem'>"
-        f"{'▲' if price_change >= 0 else '▼'} {abs(price_change):.2f}%</span>",
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        f"<span style='color:#8888AA;font-size:0.78rem'>"
-        f"${current_price/31.1035:,.2f} / g &nbsp;·&nbsp; "
-        f"${current_price*32.1507:,.0f} / kg</span>",
+        f"<div style='margin-bottom:8px;'>"
+        f"<div style='font-family:\"IBM Plex Mono\",monospace;font-size:9px;"
+        f"text-transform:uppercase;letter-spacing:0.14em;color:#5A5C78;"
+        f"margin-bottom:4px;'>Current Gold Price</div>"
+        f"<span style='font-family:\"IBM Plex Mono\",monospace;font-size:20px;"
+        f"font-weight:500;color:#E8C97A;'>${current_price:,.2f}</span>&nbsp;"
+        f"<span style='color:{delta_color};font-size:11px;font-family:\"IBM Plex Mono\",monospace;'>"
+        f"{'▲' if price_change >= 0 else '▼'} {abs(price_change):.2f}%</span>"
+        f"</div>"
+        f"<div style='font-family:\"IBM Plex Mono\",monospace;font-size:10px;"
+        f"color:#5A5C78;margin-bottom:4px;'>"
+        f"${current_price/31.1035:,.2f}/g &nbsp;·&nbsp; ${current_price*32.1507:,.0f}/kg"
+        f"</div>",
         unsafe_allow_html=True,
     )
 
     if HAS_AUTOREFRESH:
         st.markdown(
-            f"<div style='margin-top:6px;padding:6px 8px;background:#0d1117;"
-            f"border-radius:6px;border:1px solid #1e1e2e;'>"
-            f"<span style='color:#4CAF50;font-size:0.72rem;font-weight:600;'>"
-            f"🔄 Live · auto-refresh every 5 min</span><br>"
-            f"<span style='color:#555;font-size:0.68rem;'>"
-            f"Price · Macro · Trade signal</span><br>"
-            f"<span style='color:#444;font-size:0.68rem;'>Last: {now_str}</span>"
+            f"<div style='margin-top:6px;padding:6px 10px;background:var(--bg-base);"
+            f"border:1px solid var(--border);'>"
+            f"<span style='color:#22C55E;font-family:\"IBM Plex Mono\",monospace;"
+            f"font-size:9px;text-transform:uppercase;letter-spacing:0.12em;'>"
+            f"● LIVE · AUTO-REFRESH 5 MIN</span><br>"
+            f"<span style='color:#5A5C78;font-family:\"IBM Plex Mono\",monospace;"
+            f"font-size:9px;'>Last: {now_str}</span>"
             f"</div>",
             unsafe_allow_html=True,
         )
     else:
         st.markdown(
-            f"<div style='margin-top:4px;'>"
-            f"<span style='color:#888;font-size:0.70rem;'>Last: {now_str}</span>"
-            f"</div>",
+            f"<div style='margin-top:4px;font-family:\"IBM Plex Mono\",monospace;"
+            f"font-size:9px;color:#5A5C78;'>Last: {now_str}</div>",
             unsafe_allow_html=True,
         )
         if st.button("🔄 Refresh all", key="manual_refresh_btn",
@@ -941,7 +1178,10 @@ with st.sidebar:
             st.rerun()
 
     st.markdown("<hr>", unsafe_allow_html=True)
-    st.markdown("### ⚙️ Parameters")
+    st.markdown(
+        "<p class='margins-section'>Parameters</p>",
+        unsafe_allow_html=True,
+    )
 
     model_name = st.selectbox(
         "Stochastic Model",
@@ -966,7 +1206,10 @@ with st.sidebar:
     data_period = st.selectbox("Training Data", ["6mo", "1y", "2y", "5y"], index=2)
 
     st.markdown("<hr>", unsafe_allow_html=True)
-    st.markdown("### 🔧 Manual Overrides")
+    st.markdown(
+        "<p class='margins-section'>Manual Overrides</p>",
+        unsafe_allow_html=True,
+    )
     use_manual = st.checkbox("Override calibrated params")
     if use_manual:
         manual_mu    = st.slider("Drift (μ) annualised",     -0.3, 0.5,  0.05, 0.01)
@@ -983,25 +1226,29 @@ with st.sidebar:
 # ══════════════════════════════════════════════════════════════════════════════
 # MAIN CONTENT
 # ══════════════════════════════════════════════════════════════════════════════
-st.markdown("# Monte Carlo Gold Price Predictor")
 st.markdown(
-    "<p style='color:#8888AA;margin-top:-12px'>"
-    "Stochastic simulation engine for gold price forecasting & risk analysis</p>",
+    "<h1 style='font-family:\"Playfair Display\",serif;font-size:2rem;"
+    "font-weight:500;color:#ECEDF5;margin-bottom:4px;'>"
+    "Monte Carlo Gold Price Predictor</h1>"
+    "<p style='font-family:\"DM Sans\",sans-serif;font-size:13px;"
+    "color:#9395B0;margin-top:0;margin-bottom:20px;'>"
+    "Stochastic simulation engine for gold price forecasting &amp; risk analysis</p>",
     unsafe_allow_html=True,
 )
+
 
 # Load data
 prices = fetch_gold_data(data_period)
 
 tab1, tab2, tab3, tab4, tab5, tab6, tab7 , tab8= st.tabs([
-    "📈 Simulation",
-    "⚠️ Risk Analysis",
-    "📊 Market Data",
-    "ℹ️ Model Guide",
-    "🌐 Macro Intelligence",
-    "🎯 Trade Signal",
-    "📉 Avg Error",
-    "📦 Portfolio",
+    "Simulation",
+    "Risk Analysis",
+    "Market Data",
+    "Model Guide",
+    "Macro Intelligence",
+    "Trade Signal",
+    "Avg Error",
+    "Portfolio",
 ])
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1081,7 +1328,7 @@ with tab1:
         )
         st.plotly_chart(fig_ret, use_container_width=True)
 
-    st.markdown("#### Scenario Summary")
+    st.markdown("<p class='margins-section'>Scenario Summary</p>", unsafe_allow_html=True)
     scenarios = pd.DataFrame({
         "Scenario":    ["Bear (5th pct)", "Mild Bear (25th)", "Base (Median)", "Mild Bull (75th)", "Bull (95th)"],
         "Price":       [f"${np.percentile(final_prices,  5):,.0f}",
@@ -1158,7 +1405,7 @@ with tab2:
 
         # FIX 6: VRP block now correctly placed inside `with tab2:` / `else:` block
         if st.session_state.get("model_name") in ("Heston", "Heston + Jumps (Bates)"):
-            st.markdown("#### Variance Risk Premium Signal")
+            st.markdown("<p class='margins-section'>Variance Risk Premium Signal</p>", unsafe_allow_html=True)
             try:
                 from src.models.heston import HestonModel as _HM
                 h_model = _HM()
@@ -1180,7 +1427,7 @@ with tab2:
                 pass
 
         # ── Target Analysis ───────────────────────────────────────────────────
-        st.markdown("#### Probability of Reaching a Target Price")
+        st.markdown("<p class='margins-section'>Probability of Reaching a Target Price</p>", unsafe_allow_html=True)
         col_t1, col_t2 = st.columns([1, 2])
         with col_t1:
             target = st.number_input("Target Price ($)", value=int(S0 * 1.10), step=50)
@@ -1212,7 +1459,7 @@ with tab2:
         st.plotly_chart(fig_dd, use_container_width=True)
 
         # ── Risk Summary Table ────────────────────────────────────────────────
-        st.markdown("#### Full Risk Summary")
+        st.markdown("<p class='margins-section'>Full Risk Summary</p>", unsafe_allow_html=True)
         risk_table = pd.DataFrame({
             "Metric": [
                 "VaR 80%", "VaR 90%", "VaR 95%", "VaR 99%",
@@ -1242,13 +1489,13 @@ with tab2:
 # TAB 3 — MARKET DATA
 # ══════════════════════════════════════════════════════════════════════════════
 with tab3:
-    st.markdown("### Historical Gold Price")
+    st.markdown("<p class='margins-section'>Historical Gold Price</p>", unsafe_allow_html=True)
     st.plotly_chart(historical_chart(prices), use_container_width=True)
 
     col_m1, col_m2 = st.columns(2)
 
     with col_m1:
-        st.markdown("#### Return Statistics")
+        st.markdown("<p class='margins-section'>Return Statistics</p>", unsafe_allow_html=True)
         log_ret = np.log(prices["price"] / prices["price"].shift(1)).dropna()
         stats_df = pd.DataFrame({
             "Metric": [
@@ -1269,7 +1516,7 @@ with tab3:
         st.dataframe(stats_df, use_container_width=True, hide_index=True)
 
     with col_m2:
-        st.markdown("#### Rolling Volatility")
+        st.markdown("<p class='margins-section'>Rolling Volatility</p>", unsafe_allow_html=True)
         roll_vol = log_ret.rolling(30).std() * np.sqrt(252) * 100
         fig_vol  = go.Figure()
         fig_vol.add_trace(go.Scatter(
@@ -1284,7 +1531,7 @@ with tab3:
         )
         st.plotly_chart(fig_vol, use_container_width=True)
 
-    st.markdown("#### Historical Return Distribution")
+    st.markdown("<p class='margins-section'>Historical Return Distribution</p>", unsafe_allow_html=True)
     fig_hist = go.Figure()
     fig_hist.add_trace(go.Histogram(
         x=log_ret.values * 100, nbinsx=80,
@@ -1301,7 +1548,7 @@ with tab3:
 # TAB 4 — MODEL GUIDE
 # ══════════════════════════════════════════════════════════════════════════════
 with tab4:
-    st.markdown("### Model Reference Guide")
+    st.markdown("<p class='margins-section'>Model Reference Guide</p>", unsafe_allow_html=True)
 
     # FIX 7: Heston entry was missing name/formula/desc/best_for — added them.
     model_info = {
@@ -1385,7 +1632,7 @@ with tab5:
 # TAB 6 — TRADE SIGNAL
 # ══════════════════════════════════════════════════════════════════════════════
 with tab6:
-    st.markdown("### 🎯 Trade Signal")
+    st.markdown("<p class='margins-section'>Trade Signal</p>", unsafe_allow_html=True)
 
     if "paths" not in st.session_state:
         st.info("Run a simulation first in the Simulation tab to generate a trade signal.")
@@ -1397,38 +1644,44 @@ with tab6:
 
         sig = compute_trade_signal(paths_ts, S0_ts, n_steps_ts, macro_sig)
 
-        sig_colors = {"BUY": ("#1a3a1a", "#4CAF50"), "SELL": ("#3a1a1a", "#E05555"), "HOLD": ("#2a2a1a", "#E8C97A")}
+        sig_colors = {
+            "BUY":  ("#0B1A0E", "#22C55E"),
+            "SELL": ("#1A0B0B", "#EF4444"),
+            "HOLD": ("#131208", "#E8C97A"),
+        }
         sig_icons  = {"BUY": "▲", "SELL": "▼", "HOLD": "◆"}
-        bg, fg = sig_colors.get(sig["signal"], ("#1e1e1e", "#E8E8F0"))
+        bg, fg = sig_colors.get(sig["signal"], ("#10121E", "#ECEDF5"))
         icon   = sig_icons.get(sig["signal"], "")
 
-        conf_color = {"HIGH": "#4CAF50", "MEDIUM": "#E8C97A", "LOW": "#E05555"}
-        cc = conf_color.get(sig["confidence"], "#888")
+        conf_color = {"HIGH": "#22C55E", "MEDIUM": "#E8C97A", "LOW": "#EF4444"}
+        cc = conf_color.get(sig["confidence"], "#9395B0")
 
         st.markdown(f"""
-        <div style='background:{bg};border:2px solid {fg};border-radius:12px;
-                    padding:1.5rem 2rem;margin-bottom:1.2rem;'>
+        <div style='background:{bg};border:1px solid {fg};border-left:3px solid {fg};
+                    border-radius:0;padding:1.2rem 1.5rem;margin-bottom:1rem;'>
             <div style='display:flex;align-items:center;gap:1.5rem;'>
-                <div style='font-size:3.5rem;color:{fg};font-weight:800;
+                <div style='font-size:2.8rem;color:{fg};font-weight:500;
                             font-family:"Playfair Display",serif;line-height:1;'>
                     {icon} {sig["signal"]}
                 </div>
                 <div>
-                    <div style='color:{cc};font-size:0.85rem;font-weight:600;
-                                letter-spacing:0.1em;text-transform:uppercase;'>
+                    <div style='color:{cc};font-family:"IBM Plex Mono",monospace;
+                                font-size:9px;font-weight:400;letter-spacing:0.16em;
+                                text-transform:uppercase;'>
                         {sig["confidence"]} CONFIDENCE
                     </div>
-                    <div style='color:#8888AA;font-size:0.85rem;margin-top:4px;'>
-                        {sig["horizon_days"]}-day horizon &nbsp;|&nbsp;
-                        Score: {sig["score"]:+d} &nbsp;|&nbsp;
-                        Macro: {sig["macro_risk"].upper()}
+                    <div style='color:#5A5C78;font-family:"IBM Plex Mono",monospace;
+                                font-size:10px;margin-top:6px;letter-spacing:0.08em;'>
+                        {sig["horizon_days"]}-DAY HORIZON &nbsp;·&nbsp;
+                        SCORE: {sig["score"]:+d} &nbsp;·&nbsp;
+                        MACRO: {sig["macro_risk"].upper()}
                     </div>
                 </div>
             </div>
         </div>
         """, unsafe_allow_html=True)
 
-        st.markdown("#### Entry Levels")
+        st.markdown("<p class='margins-section'>Entry Levels</p>", unsafe_allow_html=True)
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Entry (Current)", f"${sig['entry']:,.2f}")
         c2.metric("Stop-Loss",       f"${sig['stop_loss']:,.2f}",
@@ -1440,20 +1693,20 @@ with tab6:
                   delta="good" if sig["risk_reward"] >= 2 else "low",
                   delta_color="normal" if sig["risk_reward"] >= 2 else "inverse")
 
-        st.markdown("#### Price Reference")
+        st.markdown("<p class='margins-section'>Price Reference</p>", unsafe_allow_html=True)
         pc1, pc2, pc3 = st.columns(3)
         pc1.metric("Per Troy Oz",  f"${sig['entry']:,.2f}")
         pc2.metric("Per Gram",     f"${sig['entry']/31.1035:,.2f}")
         pc3.metric("Per Kilogram", f"${sig['entry']*32.1507:,.0f}")
 
-        st.markdown("#### Probability Breakdown")
+        st.markdown("<p class='margins-section'>Probability Breakdown</p>", unsafe_allow_html=True)
         p1, p2, p3, p4 = st.columns(4)
         p1.metric("P(Any Gain)",  f"{sig['prob_gain']:.1f}%")
         p2.metric("P(Gain > 5%)", f"{sig['prob_gain5']:.1f}%")
         p3.metric("P(Loss > 5%)", f"{sig['prob_loss5']:.1f}%")
         p4.metric("Avg Drawdown", f"{sig['avg_max_dd']:.1f}%")
 
-        st.markdown("#### Simulated Price Range at Horizon")
+        st.markdown("<p class='margins-section'>Simulated Price Range at Horizon</p>", unsafe_allow_html=True)
         fig_range = go.Figure()
         fig_range.add_trace(go.Scatter(
             x=[sig["p5"], sig["p95"]], y=[1, 1], mode="lines",
@@ -1493,8 +1746,10 @@ with tab6:
             height=180,
             yaxis=dict(visible=False, range=[0, 2]),
             xaxis=dict(title="Gold Price (USD / troy oz)", tickformat="$,.0f",
-                       gridcolor="#1E1E2E", showgrid=True, zeroline=False),
-            legend=dict(orientation="h", y=1.3, x=0),
+                       gridcolor="#1F2240", showgrid=True, zeroline=False,
+                       tickfont=dict(color="#9395B0", family="IBM Plex Mono", size=10)),
+            legend=dict(orientation="h", y=1.3, x=0,
+                        font=dict(family="IBM Plex Mono", size=10, color="#9395B0")),
             margin=dict(l=40, r=40, t=50, b=40),
         ))
         fig_range.update_layout(**range_layout)
@@ -1502,39 +1757,57 @@ with tab6:
 
         col_r, col_w = st.columns(2)
         with col_r:
-            st.markdown("#### ✅ Reasons")
+            st.markdown("<p class='margins-section'>Signal Reasons</p>", unsafe_allow_html=True)
             for r in sig["reasons"]:
-                st.markdown(f"- {r}")
+                st.markdown(
+                    f"<div style='font-family:\"IBM Plex Mono\",monospace;font-size:11px;"
+                    f"color:#9395B0;padding:3px 0;border-bottom:1px solid #1F2240;'>"
+                    f"<span style='color:#22C55E;'>+</span> {r}</div>",
+                    unsafe_allow_html=True,
+                )
         with col_w:
-            st.markdown("#### ⚠️ Warnings")
+            st.markdown("<p class='margins-section'>Risk Warnings</p>", unsafe_allow_html=True)
             if sig["warnings"]:
                 for w in sig["warnings"]:
-                    st.markdown(f"- {w}")
+                    st.markdown(
+                        f"<div style='font-family:\"IBM Plex Mono\",monospace;font-size:11px;"
+                        f"color:#9395B0;padding:3px 0;border-bottom:1px solid #1F2240;'>"
+                        f"<span style='color:#EF4444;'>!</span> {w}</div>",
+                        unsafe_allow_html=True,
+                    )
             else:
-                st.markdown("*No significant risk warnings.*")
+                st.markdown(
+                    "<div style='font-family:\"IBM Plex Mono\",monospace;font-size:11px;"
+                    "color:#5A5C78;'>No significant risk warnings.</div>",
+                    unsafe_allow_html=True,
+                )
 
-        st.markdown("""
-        <div style='margin-top:2rem;padding:0.8rem 1rem;border-radius:6px;
-                    background:#1a1a1a;border:1px solid #333;
-                    font-size:0.78rem;color:#666;'>
-            <b>Disclaimer:</b> This signal is generated from a Monte Carlo
-            stochastic simulation and is for <b>educational and research purposes
-            only</b>. It does not constitute financial advice. Past simulation
-            performance does not guarantee future results. Always consult a
-            qualified financial advisor before trading. Gold markets carry
-            significant risk of loss.
-        </div>
-        """, unsafe_allow_html=True)
+        st.markdown(
+            "<div style='margin-top:1.5rem;padding:12px 16px;background:#10121E;"
+            "border:1px solid #1F2240;border-left:2px solid #5A5C78;'>"
+            "<span style='font-family:\"IBM Plex Mono\",monospace;font-size:9px;"
+            "text-transform:uppercase;letter-spacing:0.12em;color:#5A5C78;'>"
+            "DISCLAIMER</span>"
+            "<p style='font-family:\"DM Sans\",sans-serif;font-size:11px;color:#5A5C78;"
+            "margin:6px 0 0 0;line-height:1.6;'>"
+            "This signal is generated from a Monte Carlo stochastic simulation and is for "
+            "<strong style=\"color:#9395B0;\">educational and research purposes only</strong>. "
+            "It does not constitute financial advice. Past simulation performance does not "
+            "guarantee future results. Always consult a qualified financial advisor before "
+            "trading. Gold markets carry significant risk of loss.</p></div>",
+            unsafe_allow_html=True,
+        )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # TAB 7 — AVERAGE ERROR (BACKTEST)
 # ══════════════════════════════════════════════════════════════════════════════
 with tab7:
-    st.markdown("### 📉 Model Average Error (Backtest)")
+    st.markdown("<p class='margins-section'>Model Average Error — Backtest</p>", unsafe_allow_html=True)
     st.markdown(
-        "<p style='color:#8888AA'>Walk-forward backtest: trains on older data, "
-        "predicts on the most recent period, compares to actual prices.</p>",
+        "<p style='font-family:\"DM Sans\",sans-serif;font-size:12px;color:#9395B0;'>"
+        "Walk-forward backtest: trains on older data, predicts on the most recent period, "
+        "compares to actual prices.</p>",
         unsafe_allow_html=True,
     )
 
@@ -1694,14 +1967,8 @@ with tab7:
 #====================================================================================
 with tab8:
     render_portfolio_tab()
-    st.markdown("""
-    ### How to Run
-
-    ```bash
-    # Install dependencies
-    pip install -r requirements.txt
-
-    # Launch dashboard
-    streamlit run app.py
-    ```
-    """)
+    st.markdown(
+        "<p class='margins-section' style='margin-top:2rem;'>How to Run</p>",
+        unsafe_allow_html=True,
+    )
+    st.code("pip install -r requirements.txt\nstreamlit run app.py", language="bash")
