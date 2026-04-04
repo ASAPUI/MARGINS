@@ -5,61 +5,8 @@ A production-grade interactive dashboard for gold price simulation
 using multiple stochastic models.
 
 Author: Essabri Ali Rayan
-Version: 1.4  (bug-fix pass)
+Version: 1.4.4 
 
-Fixes applied
-─────────────
-1.  BUG: `try` block for Mean Reversion import was orphaned — missing `try:`
-    and had `pass` on the wrong except, so the import was unreachable.
-    FIX: Wrapped in its own proper `try/except ImportError` block.
-
-2.  BUG: `HestonBates` class body was unindented — all methods sat at module
-    level, making the class definition empty and raising SyntaxError.
-    FIX: Indented all methods under the class correctly.
-
-3.  BUG: `create_heston_model` was used inside `HestonBates.__init__` but
-    never imported.
-    FIX: Added `from src.models.heston import create_heston_model` in the
-    same try block.
-
-4.  BUG: `run_simulation()` had no `return` statement — the caller received
-    `None`, causing downstream `paths[:, -1]` AttributeError.
-    FIX: Added `return paths` at the end of the function.
-
-5.  BUG: DARK_LAYOUT and colour constants were defined AFTER the plotting
-    helper functions that reference them, causing NameError at import time.
-    FIX: Moved DARK_LAYOUT + colour constants to before the helper functions.
-
-6.  BUG: VRP block (`if st.session_state.get(\"model_name\") in ...`) was
-    placed at module level between the `with col2:` block and the rest of
-    tab2 content, breaking the tab2 `with` context.  All subsequent tab2
-    widgets (target analysis, drawdown chart, risk table) then rendered
-    outside the tab.
-    FIX: Moved VRP block inside `with tab2:` / `else:` block, after the
-    two-column section.
-
-7.  BUG: Tab4 (Model Guide) `model_info` dict had `\"Heston\"` entry missing
-    `\"name\"`, `\"formula\"`, `\"desc\"`, `\"best_for\"` keys, causing KeyError
-    when the expander tried to render them.
-    FIX: Completed the missing fields for the Heston entry.
-
-8.  BUG: `render_macro_tab()` was defined AFTER `with tab3:` block at module
-    level but called inside `with tab5:`.  Because function definitions
-    execute fine anywhere in module scope this doesn't error, but the
-    function references `MacroBridge` which was imported at the top in a
-    bare `from src.macro import ...` (no try/except), crashing the whole
-    app when `src` is absent.
-    FIX: Wrapped the macro import in try/except and guarded render_macro_tab
-    with a fallback message when the module is unavailable.
-
-9.  BUG: `seed` variable checked `if seed != 0` in session_state storage but
-    the number_input already converts 0 → None above.  Harmless but
-    inconsistent.
-    FIX: Simplified to store `seed` directly (already None when 0).
-
-10. BUG: Minor — `loss_pct` in `risk_gauge()` had missing space before `*`:
-    `(S0 - var_95) / S0* 100`  →  `(S0 - var_95) / S0 * 100`.
-    FIX: Added space (cosmetic, not a runtime error in Python, but confusing).
 """
 
 import streamlit as st
@@ -98,7 +45,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── Custom CSS — Bloomberg Terminal × MARGINS ────────────────────────────────
+# ── Custom CSS —  MARGINS ────────────────────────────────
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Playfair+Display:wght@500&family=DM+Sans:wght@400&display=swap');
@@ -1240,7 +1187,7 @@ st.markdown(
 # Load data
 prices = fetch_gold_data(data_period)
 
-tab1, tab2, tab3, tab4, tab5, tab6, tab7 , tab8= st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9 = st.tabs([
     "Simulation",
     "Risk Analysis",
     "Market Data",
@@ -1249,6 +1196,7 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7 , tab8= st.tabs([
     "Trade Signal",
     "Avg Error",
     "Portfolio",
+    "Investment Committee",
 ])
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1972,3 +1920,260 @@ with tab8:
         unsafe_allow_html=True,
     )
     st.code("pip install -r requirements.txt\nstreamlit run app.py", language="bash")
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TAB 9 — INVESTMENT COMMITTEE SCORECARD
+# ══════════════════════════════════════════════════════════════════════════════
+with tab9:
+    st.markdown("<p class='margins-section'>MARGINS V1.3.0 — Investment Committee Scorecard</p>", unsafe_allow_html=True)
+
+    # ── Scorecard CSS (scoped, no overflow, fully responsive) ─────────────────
+    st.markdown("""
+    <style>
+    /* Prevent Streamlit from clipping the scorecard content */
+    .block-container {
+        max-width: 100% !important;
+        padding-left: 1.5rem !important;
+        padding-right: 1.5rem !important;
+    }
+    [data-testid="stHorizontalBlock"] {
+        flex-wrap: wrap !important;
+        gap: 0.5rem !important;
+    }
+    [data-testid="column"] {
+        min-width: 170px !important;
+        flex: 1 1 170px !important;
+    }
+
+    /* Summary metric cards */
+    .sc-card {
+        background: #10121E;
+        border: 1px solid #1F2240;
+        border-radius: 6px;
+        padding: 16px 14px;
+        text-align: center;
+        box-sizing: border-box;
+        width: 100%;
+    }
+    .sc-card-label {
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 9px;
+        text-transform: uppercase;
+        letter-spacing: 0.14em;
+        color: #5A5C78;
+        margin-bottom: 8px;
+    }
+    .sc-card-score {
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 38px;
+        font-weight: 500;
+        line-height: 1;
+    }
+    .sc-card-sub {
+        font-family: 'DM Sans', sans-serif;
+        font-size: 11px;
+        color: #9395B0;
+        margin-top: 6px;
+        line-height: 1.4;
+    }
+
+    /* Model fit cards */
+    .sc-model {
+        background: #10121E;
+        border: 1px solid #1F2240;
+        border-radius: 6px;
+        padding: 12px 10px;
+        box-sizing: border-box;
+        width: 100%;
+    }
+    .sc-model-name {
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        color: #9395B0;
+        margin-bottom: 4px;
+    }
+    .sc-model-desc {
+        font-family: 'DM Sans', sans-serif;
+        font-size: 11px;
+        color: #5A5C78;
+        margin-bottom: 8px;
+    }
+
+    /* Dimension bar rows — the key fix for right-side cutoff */
+    .sc-dim-row {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        margin-bottom: 10px;
+        box-sizing: border-box;
+    }
+    .sc-dim-name {
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 11px;
+        color: #ECEDF5;
+        min-width: 160px;
+        max-width: 160px;
+        padding-right: 12px;
+        flex-shrink: 0;
+    }
+    .sc-dim-track {
+        flex: 1;
+        min-width: 0;
+        background: #1F2240;
+        border-radius: 2px;
+        height: 6px;
+        position: relative;
+        margin-right: 10px;
+    }
+    .sc-dim-fill {
+        height: 6px;
+        border-radius: 2px;
+        position: absolute;
+        left: 0; top: 0;
+    }
+    .sc-dim-score {
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 12px;
+        color: #E8C97A;
+        min-width: 26px;
+        text-align: right;
+        flex-shrink: 0;
+    }
+
+    /* Badge pills */
+    .sc-badge {
+        display: inline-block;
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 9px;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        padding: 3px 8px;
+        border-radius: 2px;
+    }
+
+    /* Overall verdict box */
+    .sc-verdict {
+        background: rgba(201,168,76,0.06);
+        border: 1px solid rgba(201,168,76,0.20);
+        border-radius: 6px;
+        padding: 24px 28px;
+        display: flex;
+        align-items: center;
+        gap: 28px;
+        box-sizing: border-box;
+        width: 100%;
+    }
+    .sc-verdict-score {
+        font-family: 'IBM Plex Mono', monospace;
+        font-size: 52px;
+        font-weight: 500;
+        color: #C9A84C;
+        line-height: 1;
+        flex-shrink: 0;
+    }
+    .sc-verdict-denom {
+        font-size: 24px;
+        color: #5A5C78;
+    }
+    .sc-verdict-text {
+        font-family: 'DM Sans', sans-serif;
+        font-size: 13px;
+        color: #9395B0;
+        line-height: 1.7;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # ── SECTION 1: Summary metric cards ──────────────────────────────────────
+    st.markdown("<p class='margins-section'>Summary Dimensions</p>", unsafe_allow_html=True)
+
+    summary_cols = st.columns([1, 1, 1, 1])
+    summary_data = [
+        ("Model sophistication", "7", "#E8C97A", "Good breadth, weak calibration"),
+        ("Risk framework",       "5", "#EF4444", "Standard metrics, gaps in tail risk"),
+        ("Practical utility",    "6", "#E8C97A", "Retail/research grade; not HF-ready"),
+        ("Code quality signals", "7", "#E8C97A", "Clean structure, solid CLI+tests"),
+    ]
+    for col, (label, score, color, sub) in zip(summary_cols, summary_data):
+        with col:
+            st.markdown(f"""
+            <div class="sc-card">
+                <div class="sc-card-label">{label}</div>
+                <div class="sc-card-score" style="color:{color};">{score}<span style="font-size:18px;color:#5A5C78;">/10</span></div>
+                <div class="sc-card-sub">{sub}</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── SECTION 2: Model-by-model fit ─────────────────────────────────────────
+    st.markdown("<p class='margins-section'>Model-by-Model Fit for Gold</p>", unsafe_allow_html=True)
+
+    model_cols = st.columns([1, 1, 1, 1, 1])
+    model_data = [
+        ("GBM",           "Baseline only",        "#C9A84C", "#2A1F00", "Weak fit"),
+        ("OU / mean rev.","Contested for gold",   "#C9A84C", "#2A1F00", "Conditional"),
+        ("Merton JD",     "Crisis / shock risk",  "#22C55E", "#0A2010", "Good fit"),
+        ("Heston SV",     "Vol clustering",        "#22C55E", "#0A2010", "Good fit"),
+        ("Regime SW",     "Crisis vs calm",        "#5599EE", "#0A1A30", "Promising"),
+    ]
+    for col, (name, desc, badge_color, badge_bg, badge_label) in zip(model_cols, model_data):
+        with col:
+            st.markdown(f"""
+            <div class="sc-model">
+                <div class="sc-model-name">{name}</div>
+                <div class="sc-model-desc">{desc}</div>
+                <span class="sc-badge" style="color:{badge_color};background:{badge_bg};">{badge_label}</span>
+            </div>
+            """, unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── SECTION 3: Detailed dimension scores ──────────────────────────────────
+    st.markdown("<p class='margins-section'>Detailed Dimension Scores</p>", unsafe_allow_html=True)
+
+    dimension_data = [
+        ("Model breadth",        9, "#5599EE"),
+        ("Calibration depth",    4, "#5599EE"),
+        ("VaR / CVaR quality",   6, "#22C55E"),
+        ("Tail risk coverage",   3, "#22C55E"),
+        ("Backtest rigor",       6, "#C9A84C"),
+        ("Macro factor coverage",2, "#C9A84C"),
+        ("Commercial readiness", 4, "#EF4444"),
+        ("Documentation clarity",8, "#EF4444"),
+    ]
+
+    dim_html = ""
+    for name, score, color in dimension_data:
+        pct = score * 10
+        dim_html += f"""
+        <div class="sc-dim-row">
+            <div class="sc-dim-name">{name}</div>
+            <div class="sc-dim-track">
+                <div class="sc-dim-fill" style="width:{pct}%;background:{color};"></div>
+            </div>
+            <div class="sc-dim-score">{score}</div>
+        </div>"""
+
+    st.markdown(dim_html, unsafe_allow_html=True)
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    # ── SECTION 4: Overall verdict ────────────────────────────────────────────
+    st.markdown("""
+    <div class="sc-verdict">
+        <div class="sc-verdict-score">6.2<span class="sc-verdict-denom">/10</span></div>
+        <div class="sc-verdict-text">
+            <strong style="color:#ECEDF5;font-family:'IBM Plex Mono',monospace;font-size:11px;
+            text-transform:uppercase;letter-spacing:0.12em;">Strong academic portfolio, incomplete practitioner toolkit.</strong><br>
+            Suitable for quantitative research, retail analytics, and educational use.
+            Not production-ready for institutional risk desks without macro integration,
+            correlation structure, and calibration improvements.
+            <br><br>
+            <span class="sc-badge" style="color:#C9A84C;background:#2A1F00;">
+                ⚠ Not hedge-fund ready in current state
+            </span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
