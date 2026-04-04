@@ -371,7 +371,7 @@ pytest tests/test_models.py -v
 - [✅] **Phase 6: Walk-Forward Portfolio Backtest with vol-parity ensemble**
 - [✅] **Diebold-Mariano statistical significance ranking**
 - [ ] Integrate FRED API for live macro features (real rates, DXY, inflation breakevens)
-- [ ] Portfolio mode — simulate multiple assets simultaneously (gold, silver, miners)
+- [✅] Portfolio mode — simulate multiple assets simultaneously (gold, silver, miners)
 - [ ] Add implied volatility surface from gold options data
 - [ ] Deploy dashboard to Streamlit Cloud
 - [ ] Add email/Telegram alerts for price target breaches
