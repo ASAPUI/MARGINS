@@ -521,7 +521,18 @@ def run_simulation(model_name, S0, n_steps, n_paths, mu, sigma, prices, seed=Non
                 model.calibrate(log_returns)
     except Exception:
         pass
-
+        # Apply manual overrides from sidebar (but not for OU/Regime which use price-level calibration)
+        if model_name not in ('Mean Reversion (OU)', 'Regime Switching'):
+            if mu is not None and hasattr(model, 'mu'):
+                model.mu = mu
+            if sigma is not None and hasattr(model, 'sigma'):
+                model.sigma = sigma
+            # Also update params dataclass if it exists (for Heston, etc.)
+            if hasattr(model, 'params'):
+                if mu is not None and hasattr(model.params, 'mu'):
+                    model.params.mu = mu
+                if sigma is not None and hasattr(model.params, 'sigma'):
+                    model.params.sigma = sigma
     # Apply macro parameter adjustments
     if HAS_MACRO and macro_signals is not None and not macro_signals.is_fallback:
         try:
@@ -1925,166 +1936,25 @@ with tab8:
 # TAB 9 — INVESTMENT COMMITTEE SCORECARD
 # ══════════════════════════════════════════════════════════════════════════════
 with tab9:
-    st.markdown("<p class='margins-section'>MARGINS V1.3.0 — Investment Committee Scorecard</p>", unsafe_allow_html=True)
-
-    # ── Scorecard CSS (scoped, no overflow, fully responsive) ─────────────────
+    # Inject responsive CSS to fix overflow issues
     st.markdown("""
     <style>
-    /* Prevent Streamlit from clipping the scorecard content */
-    .block-container {
-        max-width: 100% !important;
-        padding-left: 1.5rem !important;
-        padding-right: 1.5rem !important;
-    }
-    [data-testid="stHorizontalBlock"] {
-        flex-wrap: wrap !important;
-        gap: 0.5rem !important;
-    }
-    [data-testid="column"] {
-        min-width: 170px !important;
-        flex: 1 1 170px !important;
-    }
-
-    /* Summary metric cards */
-    .sc-card {
-        background: #10121E;
-        border: 1px solid #1F2240;
-        border-radius: 6px;
-        padding: 16px 14px;
-        text-align: center;
-        box-sizing: border-box;
-        width: 100%;
-    }
-    .sc-card-label {
-        font-family: 'IBM Plex Mono', monospace;
-        font-size: 9px;
-        text-transform: uppercase;
-        letter-spacing: 0.14em;
-        color: #5A5C78;
-        margin-bottom: 8px;
-    }
-    .sc-card-score {
-        font-family: 'IBM Plex Mono', monospace;
-        font-size: 38px;
-        font-weight: 500;
-        line-height: 1;
-    }
-    .sc-card-sub {
-        font-family: 'DM Sans', sans-serif;
-        font-size: 11px;
-        color: #9395B0;
-        margin-top: 6px;
-        line-height: 1.4;
-    }
-
-    /* Model fit cards */
-    .sc-model {
-        background: #10121E;
-        border: 1px solid #1F2240;
-        border-radius: 6px;
-        padding: 12px 10px;
-        box-sizing: border-box;
-        width: 100%;
-    }
-    .sc-model-name {
-        font-family: 'IBM Plex Mono', monospace;
-        font-size: 10px;
-        text-transform: uppercase;
-        letter-spacing: 0.12em;
-        color: #9395B0;
-        margin-bottom: 4px;
-    }
-    .sc-model-desc {
-        font-family: 'DM Sans', sans-serif;
-        font-size: 11px;
-        color: #5A5C78;
-        margin-bottom: 8px;
-    }
-
-    /* Dimension bar rows — the key fix for right-side cutoff */
-    .sc-dim-row {
-        display: flex;
-        align-items: center;
-        width: 100%;
-        margin-bottom: 10px;
-        box-sizing: border-box;
-    }
-    .sc-dim-name {
-        font-family: 'IBM Plex Mono', monospace;
-        font-size: 11px;
-        color: #ECEDF5;
-        min-width: 160px;
-        max-width: 160px;
-        padding-right: 12px;
-        flex-shrink: 0;
-    }
-    .sc-dim-track {
-        flex: 1;
-        min-width: 0;
-        background: #1F2240;
-        border-radius: 2px;
-        height: 6px;
-        position: relative;
-        margin-right: 10px;
-    }
-    .sc-dim-fill {
-        height: 6px;
-        border-radius: 2px;
-        position: absolute;
-        left: 0; top: 0;
-    }
-    .sc-dim-score {
-        font-family: 'IBM Plex Mono', monospace;
-        font-size: 12px;
-        color: #E8C97A;
-        min-width: 26px;
-        text-align: right;
-        flex-shrink: 0;
-    }
-
-    /* Badge pills */
-    .sc-badge {
-        display: inline-block;
-        font-family: 'IBM Plex Mono', monospace;
-        font-size: 9px;
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-        padding: 3px 8px;
-        border-radius: 2px;
-    }
-
-    /* Overall verdict box */
-    .sc-verdict {
-        background: rgba(201,168,76,0.06);
-        border: 1px solid rgba(201,168,76,0.20);
-        border-radius: 6px;
-        padding: 24px 28px;
-        display: flex;
-        align-items: center;
-        gap: 28px;
-        box-sizing: border-box;
-        width: 100%;
-    }
-    .sc-verdict-score {
-        font-family: 'IBM Plex Mono', monospace;
-        font-size: 52px;
-        font-weight: 500;
-        color: #C9A84C;
-        line-height: 1;
-        flex-shrink: 0;
-    }
-    .sc-verdict-denom {
-        font-size: 24px;
-        color: #5A5C78;
-    }
-    .sc-verdict-text {
-        font-family: 'DM Sans', sans-serif;
-        font-size: 13px;
-        color: #9395B0;
-        line-height: 1.7;
-    }
+    .block-container { max-width: 100% !important; padding-left: 1rem !important; padding-right: 1rem !important; }
+    [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; gap: 0.5rem !important; }
+    [data-testid="column"] { min-width: 180px !important; flex: 1 1 180px !important; }
+    .scorecard-wrapper { width: 100%; box-sizing: border-box; overflow: visible; }
+    .dimension-row { display: flex; align-items: center; width: 100%; margin-bottom: 8px; }
+    .dimension-label { width: 180px; font-size: 14px; color: #ECEDF5; flex-shrink: 0; }
+    .dimension-bar-container { flex: 1; min-width: 0; background: rgba(255,255,255,0.05); height: 8px; border-radius: 4px; }
+    .dimension-bar { height: 100%; border-radius: 4px; }
+    .dimension-score { min-width: 28px; text-align: right; margin-left: 8px; flex-shrink: 0; font-weight: 600; }
     </style>
     """, unsafe_allow_html=True)
+    
+    # Wrap entire scorecard in container
+    st.markdown('<div class="scorecard-wrapper">', unsafe_allow_html=True)
+
+    st.markdown("<div style='font-family:\"Playfair Display\",serif;font-size:1.6rem;font-weight:500;color:#C9A84C;margin-bottom:1.5rem;letter-spacing:0.02em;'>MARGINS V1.3.0 — Investment Committee Scorecard</div>", unsafe_allow_html=True)
 
     # ── SECTION 1: Summary metric cards ──────────────────────────────────────
     st.markdown("<p class='margins-section'>Summary Dimensions</p>", unsafe_allow_html=True)
@@ -2092,17 +1962,17 @@ with tab9:
     summary_cols = st.columns([1, 1, 1, 1])
     summary_data = [
         ("Model sophistication", "7", "#E8C97A", "Good breadth, weak calibration"),
-        ("Risk framework",       "5", "#EF4444", "Standard metrics, gaps in tail risk"),
-        ("Practical utility",    "6", "#E8C97A", "Retail/research grade; not HF-ready"),
+        ("Risk framework", "5", "#EF4444", "Standard metrics, gaps in tail risk"),
+        ("Practical utility", "6", "#E8C97A", "Retail/research grade; not HF-ready"),
         ("Code quality signals", "7", "#E8C97A", "Clean structure, solid CLI+tests"),
     ]
     for col, (label, score, color, sub) in zip(summary_cols, summary_data):
         with col:
             st.markdown(f"""
-            <div class="sc-card">
-                <div class="sc-card-label">{label}</div>
-                <div class="sc-card-score" style="color:{color};">{score}<span style="font-size:18px;color:#5A5C78;">/10</span></div>
-                <div class="sc-card-sub">{sub}</div>
+            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 16px; height: 100%; box-sizing: border-box;">
+                <div style="font-size: 12px; color: #9395B0; margin-bottom: 4px;">{label}</div>
+                <div style="font-size: 32px; font-weight: 700; color: {color}; line-height: 1;">{score}<span style="font-size: 14px; color: #666;">/10</span></div>
+                <div style="font-size: 11px; color: #666; margin-top: 6px; line-height: 1.3;">{sub}</div>
             </div>
             """, unsafe_allow_html=True)
 
@@ -2113,19 +1983,19 @@ with tab9:
 
     model_cols = st.columns([1, 1, 1, 1, 1])
     model_data = [
-        ("GBM",           "Baseline only",        "#C9A84C", "#2A1F00", "Weak fit"),
-        ("OU / mean rev.","Contested for gold",   "#C9A84C", "#2A1F00", "Conditional"),
-        ("Merton JD",     "Crisis / shock risk",  "#22C55E", "#0A2010", "Good fit"),
-        ("Heston SV",     "Vol clustering",        "#22C55E", "#0A2010", "Good fit"),
-        ("Regime SW",     "Crisis vs calm",        "#5599EE", "#0A1A30", "Promising"),
+        ("GBM", "Baseline only", "#C9A84C", "#2A1F00", "Weak fit"),
+        ("OU / mean rev.","Contested for gold", "#C9A84C", "#2A1F00", "Conditional"),
+        ("Merton JD", "Crisis / shock risk", "#22C55E", "#0A2010", "Good fit"),
+        ("Heston SV", "Vol clustering", "#22C55E", "#0A2010", "Good fit"),
+        ("Regime SW", "Crisis vs calm", "#5599EE", "#0A1A30", "Promising"),
     ]
     for col, (name, desc, badge_color, badge_bg, badge_label) in zip(model_cols, model_data):
         with col:
             st.markdown(f"""
-            <div class="sc-model">
-                <div class="sc-model-name">{name}</div>
-                <div class="sc-model-desc">{desc}</div>
-                <span class="sc-badge" style="color:{badge_color};background:{badge_bg};">{badge_label}</span>
+            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 16px; height: 100%; box-sizing: border-box;">
+                <div style="font-weight: 600; color: #ECEDF5; margin-bottom: 4px;">{name}</div>
+                <div style="font-size: 12px; color: #9395B0; margin-bottom: 8px;">{desc}</div>
+                <span style="background: {badge_bg}; color: {badge_color}; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500;">{badge_label}</span>
             </div>
             """, unsafe_allow_html=True)
 
@@ -2135,11 +2005,11 @@ with tab9:
     st.markdown("<p class='margins-section'>Detailed Dimension Scores</p>", unsafe_allow_html=True)
 
     dimension_data = [
-        ("Model breadth",        9, "#5599EE"),
-        ("Calibration depth",    4, "#5599EE"),
-        ("VaR / CVaR quality",   6, "#22C55E"),
-        ("Tail risk coverage",   3, "#22C55E"),
-        ("Backtest rigor",       6, "#C9A84C"),
+        ("Model breadth", 9, "#5599EE"),
+        ("Calibration depth", 4, "#5599EE"),
+        ("VaR / CVaR quality", 6, "#22C55E"),
+        ("Tail risk coverage", 3, "#22C55E"),
+        ("Backtest rigor", 6, "#C9A84C"),
         ("Macro factor coverage",2, "#C9A84C"),
         ("Commercial readiness", 4, "#EF4444"),
         ("Documentation clarity",8, "#EF4444"),
@@ -2149,31 +2019,33 @@ with tab9:
     for name, score, color in dimension_data:
         pct = score * 10
         dim_html += f"""
-        <div class="sc-dim-row">
-            <div class="sc-dim-name">{name}</div>
-            <div class="sc-dim-track">
-                <div class="sc-dim-fill" style="width:{pct}%;background:{color};"></div>
+        <div class="dimension-row">
+            <div class="dimension-label">{name}</div>
+            <div class="dimension-bar-container">
+                <div class="dimension-bar" style="width: {pct}%; background: {color};"></div>
             </div>
-            <div class="sc-dim-score">{score}</div>
-        </div>"""
-
+            <div class="dimension-score" style="color: {color};">{score}</div>
+        </div>
+        """
+    
     st.markdown(dim_html, unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
 
     # ── SECTION 4: Overall verdict ────────────────────────────────────────────
     st.markdown("""
-    <div class="sc-verdict">
-        <div class="sc-verdict-score">6.2<span class="sc-verdict-denom">/10</span></div>
-        <div class="sc-verdict-text">
-            <strong style="color:#ECEDF5;font-family:'IBM Plex Mono',monospace;font-size:11px;
-            text-transform:uppercase;letter-spacing:0.12em;">Strong academic portfolio, incomplete practitioner toolkit.</strong><br>
+    <div style="background: rgba(201,168,76,0.08); border: 1px solid rgba(201,168,76,0.2); border-radius: 12px; padding: 24px; text-align: center;">
+        <div style="font-size: 48px; font-weight: 700; color: #C9A84C; margin-bottom: 8px;">6.2<span style="font-size: 24px; color: #666;">/10</span></div>
+        <div style="font-size: 16px; color: #ECEDF5; font-weight: 600; margin-bottom: 12px;">Strong academic portfolio, incomplete practitioner toolkit.</div>
+        <div style="font-size: 13px; color: #9395B0; line-height: 1.6; max-width: 600px; margin: 0 auto 16px auto;">
             Suitable for quantitative research, retail analytics, and educational use.
             Not production-ready for institutional risk desks without macro integration,
             correlation structure, and calibration improvements.
-            <br><br>
-            <span class="sc-badge" style="color:#C9A84C;background:#2A1F00;">
-                ⚠ Not hedge-fund ready in current state
-            </span>
+        </div>
+        <div style="display: inline-block; background: rgba(239,68,68,0.15); color: #EF4444; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 500;">
+            ⚠ Not hedge-fund ready in current state
         </div>
     </div>
     """, unsafe_allow_html=True)
+    
+    # Close wrapper
+    st.markdown('</div>', unsafe_allow_html=True)

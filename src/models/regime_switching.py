@@ -14,7 +14,11 @@ from scipy import stats
 from enum import IntEnum
 import logging
 from dataclasses import dataclass
-
+try:
+    from hmmlearn.hmm import GaussianHMM
+    _HMM_AVAILABLE = True
+except ImportError:
+    _HMM_AVAILABLE = False
 logger = logging.getLogger(__name__)
 
 
@@ -110,41 +114,86 @@ class RegimeSwitchingModel:
         
         logger.info(f"Regime model initialized with {len(params.regimes)} regimes")
     
-    def calibrate(self, prices: np.ndarray, n_regimes: int = 2) -> RegimeSwitchingParameters:
+        def calibrate(self, prices: np.ndarray, n_regimes: int = 2) -> RegimeSwitchingParameters:
         """
-        Calibrate using simple threshold-based regime identification.
+        Calibrate using HMM (hmmlearn) if available, else fall back to threshold method.
+        """
+        # Try hmmlearn first
+        if _HMM_AVAILABLE:
+            try:
+                # Compute log returns
+                log_returns = np.diff(np.log(prices))
+                
+                # Fit Gaussian HMM with 3 regimes
+                model_hmm = GaussianHMM(
+                    n_components=3, 
+                    covariance_type='full', 
+                    n_iter=100, 
+                    random_state=42
+                )
+                model_hmm.fit(log_returns.reshape(-1, 1))
+                
+                # Store fitted parameters as requested
+                self.means_ = model_hmm.means_.flatten()  # Daily drift per regime
+                self.sigmas_ = np.sqrt([model_hmm.covars_[i][0][0] for i in range(3)])  # Daily vol per regime
+                self.transmat_ = model_hmm.transmat_  # Transition matrix
+                self.start_prob_ = model_hmm.startprob_  # Initial probabilities
+                
+                # Annualize parameters: mu * 252, sigma * sqrt(252)
+                mus_annual = self.means_ * 252
+                sigmas_annual = self.sigmas_ * np.sqrt(252)
+                
+                # Sort regimes by volatility (low to high) to map to CALM, CRISIS, BUBBLE
+                order = np.argsort(sigmas_annual)
+                regime_keys = [Regime.CALM, Regime.CRISIS, Regime.BUBBLE]
+                
+                regimes = {}
+                for i, idx in enumerate(order):
+                    key = regime_keys[i]
+                    regimes[key] = RegimeParameters(
+                        mu=float(mus_annual[idx]),
+                        sigma=float(sigmas_annual[idx]),
+                        label=key.name.capitalize()
+                    )
+                
+                # Reorder transition matrix to match regime ordering
+                transmat_ordered = self.transmat_[order, :][:, order]
+                
+                self.params = RegimeSwitchingParameters(regimes, transmat_ordered)
+                logger.info(f"Regime model calibrated with HMM: "
+                           f"calm_vol={regimes[Regime.CALM].sigma:.2%}, "
+                           f"crisis_vol={regimes[Regime.CRISIS].sigma:.2%}")
+                return self.params
+                
+            except Exception:
+                # Silent fallback to threshold method
+                pass
         
-        Args:
-            prices: Historical prices
-            n_regimes: Number of regimes to identify
-            
-        Returns:
-            Calibrated parameters
-        """
+        # Fallback: Original threshold-based calibration
         import pandas as pd
-        
+
         returns = np.diff(np.log(prices))
-        
+
         # Calculate rolling volatility
         window = 20
         rolling_vol = pd.Series(returns).rolling(window).std() * np.sqrt(252)
         rolling_vol = rolling_vol.dropna().values
-        
+
         if len(rolling_vol) < 50:
             logger.warning("Not enough data for regime calibration")
             return self.params
-        
+
         # Identify regimes using volatility percentiles
         low_thresh = np.percentile(rolling_vol, 40)
         high_thresh = np.percentile(rolling_vol, 80)
-        
+
         calm_mask = rolling_vol <= low_thresh
         crisis_mask = rolling_vol >= high_thresh
-        
+
         # Calculate regime parameters
         calm_returns = returns[window-1:][calm_mask[:len(returns[window-1:])]]
         crisis_returns = returns[window-1:][crisis_mask[:len(returns[window-1:])]]
-        
+
         regimes = {}
         if len(calm_returns) > 10:
             regimes[Regime.CALM] = RegimeParameters(
@@ -154,7 +203,7 @@ class RegimeSwitchingModel:
             )
         else:
             regimes[Regime.CALM] = RegimeParameters(mu=0.03, sigma=0.12, label="Calm")
-        
+
         if len(crisis_returns) > 10:
             regimes[Regime.CRISIS] = RegimeParameters(
                 mu=np.mean(crisis_returns) * 252,
@@ -163,33 +212,34 @@ class RegimeSwitchingModel:
             )
         else:
             regimes[Regime.CRISIS] = RegimeParameters(mu=0.08, sigma=0.25, label="Crisis")
-        
+
         # Estimate transition matrix
         # Simple frequency-based estimation
         regime_series = np.where(rolling_vol > (low_thresh + high_thresh)/2, 1, 0)
-        
+
         n_trans = len(regime_series) - 1
         trans_counts = np.zeros((2, 2))
-        
+
         for i in range(n_trans):
             from_reg = int(regime_series[i])
             to_reg = int(regime_series[i+1])
             trans_counts[from_reg, to_reg] += 1
-        
+
         # Normalize to probabilities
         trans_probs = trans_counts / trans_counts.sum(axis=1, keepdims=True)
-        trans_probs = np.nan_to_num(trans_probs, nan=0.5)  # Handle division by zero
-        
+        trans_probs = np.nan_to_num(trans_probs, nan=0.5) # Handle division by zero
+
         # Ensure valid probabilities
         for i in range(2):
             if trans_probs[i].sum() == 0:
                 trans_probs[i] = [0.9, 0.1] if i == 0 else [0.2, 0.8]
             trans_probs[i] = trans_probs[i] / trans_probs[i].sum()
-        
+
         self.params = RegimeSwitchingParameters(regimes, trans_probs)
         logger.info(f"Regime model calibrated: calm_vol={regimes[Regime.CALM].sigma:.2%}, crisis_vol={regimes[Regime.CRISIS].sigma:.2%}")
-        
+
         return self.params
+
     
     def step(
         self,

@@ -390,26 +390,16 @@ def cmd_risk(args):
 # ══════════════════════════════════════════════════════════════════════════════
 #  BACKTEST  — rebuilt to reduce MAE/RMSE
 # ══════════════════════════════════════════════════════════════════════════════
-def _backtest_window(model_key, train_prices, test_prices, n_paths, calib_window):
+def _backtest_window(model_key, train_prices, test_prices, n_paths, calib_window, window_idx):
     """
     Run one walk-forward window and return error metrics.
-
-    Key fixes vs the original:
-      1. Calibrate on the MOST RECENT `calib_window` days only (not the whole
-         train slice) — prevents stale drift/sigma dragging predictions far off.
-      2. Use the MEDIAN path (not mean) as the point estimate — the median is
-         more robust to outlier paths and reduces RMSE.
-      3. Use log-return MAPE instead of level MAPE — level MAPE is dominated
-         by the absolute price ($2300+) and hides the true percentage error.
-      4. Step-ahead MAE: compute MAE between preds[t] and actual[t] for every
-         step, not just the terminal price — gives a fairer picture.
     """
     # FIX 1: calibrate on a recent window only
     recent = train_prices.iloc[-calib_window:]
-    model  = build_and_calibrate(model_key, recent)
+    model = build_and_calibrate(model_key, recent)
 
-    S0_w    = float(train_prices.iloc[-1])
-    n_d     = len(test_prices)
+    S0_w = float(train_prices.iloc[-1])
+    n_d = len(test_prices)
     if n_d < 2:
         return None
 
@@ -417,42 +407,40 @@ def _backtest_window(model_key, train_prices, test_prices, n_paths, calib_window
         S0=S0_w,
         n_steps=n_d + 1,
         n_paths=n_paths,
-        random_seed=42,
+        random_seed=window_idx,  # Changed from 42 to window_idx for independent randomness
     )
 
-    # FIX 2: median path as point estimate (not mean)
-    preds   = np.median(paths_w[:, 1:], axis=0)   # shape (n_d,)
-    actuals = test_prices.values                    # shape (n_d,)
+    # Changed from np.mean to np.median as point estimate
+    preds = np.median(paths_w[:, 1:], axis=0)  # shape (n_d,)
+    actuals = test_prices.values  # shape (n_d,)
 
-    errors  = preds - actuals
-    mae     = float(np.mean(np.abs(errors)))
-    rmse    = float(np.sqrt(np.mean(errors ** 2)))
+    errors = preds - actuals
+    mae = float(np.mean(np.abs(errors)))
+    rmse = float(np.sqrt(np.mean(errors ** 2)))
 
     # FIX 3: MAPE computed on log returns (not levels)
-    log_pred   = np.log(preds[1:]   / preds[:-1])    if len(preds)   > 1 else np.array([])
-    log_actual = np.log(actuals[1:] / actuals[:-1])  if len(actuals) > 1 else np.array([])
+    log_pred = np.log(preds[1:] / preds[:-1]) if len(preds) > 1 else np.array([])
+    log_actual = np.log(actuals[1:] / actuals[:-1]) if len(actuals) > 1 else np.array([])
     if len(log_actual) > 0:
         mape = float(np.mean(np.abs(log_pred - log_actual)) * 100)
     else:
         mape = 0.0
 
-    # Directional accuracy on log returns
-    if len(log_pred) > 0:
-        dir_acc = float(np.mean((log_pred > 0) == (log_actual > 0)) * 100)
-    else:
-        dir_acc = 50.0
+    # New directional accuracy: based on final price vs initial over the full test window
+    final_pred_up = np.median(paths_w[:, -1]) > S0_w
+    final_actual_up = actuals[-1] > actuals[0]
+    dir_acc = 100.0 if (final_pred_up == final_actual_up) else 0.0
 
     # FIX 4: also compute terminal-only MAE for reference
     terminal_mae = float(abs(preds[-1] - actuals[-1]))
 
     return {
-        "rmse":         rmse,
-        "mae":          mae,
-        "mape":         mape,
+        "rmse": rmse,
+        "mae": mae,
+        "mape": mape,
         "dir_accuracy": dir_acc,
         "terminal_mae": terminal_mae,
     }
-
 
 def cmd_backtest(args):
     print_section("Walk-Forward Backtest")
@@ -495,10 +483,10 @@ def cmd_backtest(args):
             train_prices = prices.iloc[train_sl]
             test_prices  = prices.iloc[test_sl]
             try:
-                m = _backtest_window(
-                    model_key, train_prices, test_prices,
-                    args.paths, calib_window,
-                )
+                       m = _backtest_window(
+            model_key, train_prices, test_prices,
+            args.paths, calib_window, i,
+        )
                 if m:
                     window_metrics.append(m)
             except Exception:

@@ -260,6 +260,11 @@ class HestonModel:
 
         # Final Feller check (soft — calibrated data may be borderline)
         self.params.validate(strict_feller=False)
+                # Enforce Feller condition: 2*kappa*theta > xi^2
+        # If violated, adjust xi to satisfy it with 5% buffer
+        if 2 * self.params.kappa * self.params.theta <= self.params.xi ** 2:
+            self.params.xi = np.sqrt(2 * self.params.kappa * self.params.theta) * 0.95
+            logger.info(f"Feller adjustment: xi adjusted to {self.params.xi:.4f}")
 
         logger.info(
             "MLE calibration done (success=%s, nit=%d): %s",
@@ -349,7 +354,12 @@ class HestonModel:
         v_pos   = np.maximum(v, 0.0)
 
         # ── Variance update (QE) ─────────────────────────────────────────────
-        v_next = self._qe_variance_step(v_pos, Z2, U_unif)
+                # Euler-Maruyama with reflection scheme for variance (prevents negative v)
+        v_next = np.abs(
+            v_pos + 
+            self.params.kappa * (self.params.theta - v_pos) * self.dt + 
+            self.params.xi * np.sqrt(np.maximum(v_pos, 0.0) * self.dt) * Z2
+        )
 
         # ── Log-price update (Euler on log) ──────────────────────────────────
         # Use the averaged variance over [t, t+dt] as per Andersen §4

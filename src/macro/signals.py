@@ -10,7 +10,6 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional, Any
-import pydantic
 
 
 class RiskTier(Enum):
@@ -26,13 +25,6 @@ class RiskTier(Enum):
 class AnomalyEvent:
     """
     Represents a single anomaly detection event from WorldMonitor.
-    
-    Attributes:
-        region: Geographic region code (e.g., "ME", "EU", "APAC")
-        event_type: Classification of anomaly (e.g., "conflict", "economic", "infrastructure")
-        z_score: Statistical deviation from baseline (>= 2.0 is significant)
-        timestamp: When the anomaly was detected
-        severity: Derived from z_score thresholds
     """
     region: str
     event_type: str
@@ -81,6 +73,10 @@ class MacroSignal:
     # AI narrative
     brief_text: Optional[str] = None
     
+    # Financial market indicators (set by bridge.py)
+    real_rate_delta: float = 0.0  # Change in 10Y real rate (annualized)
+    dxy_delta: float = 0.0        # % change in DXY over 30 days
+    
     # Metadata
     fetched_at: datetime = field(default_factory=datetime.utcnow)
     is_fallback: bool = False
@@ -95,15 +91,6 @@ class MacroSignal:
     ) -> "MacroSignal":
         """
         Factory method to create MacroSignal from raw WorldMonitor API responses.
-        
-        Args:
-            risk_scores: Dict mapping country codes to CII scores (0-100)
-            anomalies: List of anomaly event dicts from /api/temporal-baseline
-            brief: Optional AI world brief text
-            is_fallback: Whether this data is from cache/fallback
-            
-        Returns:
-            Populated MacroSignal instance with all derived fields computed
         """
         # Compute derived CII metrics
         if risk_scores:
@@ -154,7 +141,9 @@ class MacroSignal:
     @property
     def risk_tier(self) -> RiskTier:
         """Overall risk classification based on top-5 average CII."""
-        if self.cii_top5_avg >= 70:
+        if self.cii_top5_avg >= 85:
+            return RiskTier.EXTREME
+        elif self.cii_top5_avg >= 70:
             return RiskTier.CRITICAL
         elif self.cii_top5_avg >= 50:
             return RiskTier.HIGH
@@ -170,6 +159,8 @@ class MacroSignal:
             "high_anomaly_count": self.high_anomaly_count,
             "critical_anomaly_count": self.critical_anomaly_count,
             "active_hotspot_count": self.active_hotspot_count,
+            "real_rate_delta": round(self.real_rate_delta, 4),
+            "dxy_delta": round(self.dxy_delta, 4),
             "risk_tier": self.risk_tier.value,
             "is_fallback": self.is_fallback,
             "fetched_at": self.fetched_at.isoformat(),

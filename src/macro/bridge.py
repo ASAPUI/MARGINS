@@ -343,7 +343,70 @@ class MacroBridge:
             return float(val) if val != "." else None
         except Exception:
             return None
+    async def _fetch_fred_real_rate(self) -> Tuple[Optional[float], Optional[float]]:
+        """
+        Fetch 10Y real rate from FRED (DFII10) or compute as DGS10 - T5YIE.
+        Returns (current_rate, delta_30d) where delta is change over 30 days (annualized).
+        """
+        if not self.config.fred_key:
+            return None, None
+        
+        try:
+            from fredapi import Fred
+            fred = Fred(api_key=self.config.fred_key)
+            
+            # Try DFII10 (10Y TIPS yield = real rate) first
+            try:
+                series = fred.get_series('DFII10', observation_start=(datetime.now() - timedelta(days=60)).strftime('%Y-%m-%d'))
+                if series is not None and len(series) >= 2:
+                    current = float(series.iloc[-1]) / 100  # Convert % to decimal
+                    prev_30d = float(series.iloc[-30]) / 100 if len(series) >= 30 else float(series.iloc[0]) / 100
+                    delta = current - prev_30d  # Already annualized
+                    return current, delta
+            except Exception:
+                pass
+            
+            # Fallback: DGS10 - T5YIE (nominal - inflation = real)
+            try:
+                nominal = fred.get_series('DGS10', observation_start=(datetime.now() - timedelta(days=60)).strftime('%Y-%m-%d'))
+                breakeven = fred.get_series('T5YIE', observation_start=(datetime.now() - timedelta(days=60)).strftime('%Y-%m-%d'))
+                
+                if nominal is not None and breakeven is not None and len(nominal) >= 2 and len(breakeven) >= 2:
+                    real_current = (float(nominal.iloc[-1]) - float(breakeven.iloc[-1])) / 100
+                    real_prev = (float(nominal.iloc[-30]) - float(breakeven.iloc[-30])) / 100 if len(nominal) >= 30 and len(breakeven) >= 30 else \
+                                (float(nominal.iloc[0]) - float(breakeven.iloc[0])) / 100
+                    delta = real_current - real_prev
+                    return real_current, delta
+            except Exception:
+                pass
+                
+        except Exception as e:
+            logger.debug(f"FRED real rate fetch error: {e}")
+        
+        return None, None
 
+    async def _fetch_dxy(self) -> Tuple[Optional[float], Optional[float]]:
+        """
+        Fetch DXY (Dollar Index) from yfinance.
+        Returns (current_price, delta_30d_pct) where delta is % change over 30 days.
+        """
+        try:
+            import yfinance as yf
+            ticker = yf.Ticker("DX-Y.NYB")
+            hist = ticker.history(period="3mo")
+            
+            if hist.empty or len(hist) < 30:
+                return None, None
+            
+            current = float(hist["Close"].iloc[-1])
+            price_30d_ago = float(hist["Close"].iloc[-30])
+            delta_pct = (current - price_30d_ago) / price_30d_ago
+            
+            return current, delta_pct
+            
+        except Exception as e:
+            logger.debug(f"DXY fetch error: {e}")
+            return None, None
     # ── CII computation ────────────────────────────────────────────────────────
 
     def _build_cii(
@@ -474,11 +537,10 @@ class MacroBridge:
     async def get_signals(self) -> MacroSignal:
         """
         Fetch and return MacroSignal using all available tiers.
-        Never raises — always returns something meaningful.
         """
         if not self.config.enabled:
             return MacroSignal(cii_scores=dict(BASELINE_CII),
-                               cii_top5_avg=50.0, cii_max=0.0, is_fallback=True)
+                             cii_top5_avg=50.0, cii_max=0.0, is_fallback=True)
 
         async with self._get_lock():
             try:
@@ -486,10 +548,13 @@ class MacroBridge:
                 wm_task = self._try_worldmonitor()
                 gdelt_task = self._fetch_gdelt_scores()
                 fred_task = self._fetch_fred_gold_vol()
+                real_rate_task = self._fetch_fred_real_rate()
+                dxy_task = self._fetch_dxy()
 
-                (wm_scores, wm_anomalies), gdelt_scores, gold_vol = \
-                    await asyncio.gather(wm_task, gdelt_task, fred_task,
-                                         return_exceptions=True)
+                (wm_scores, wm_anomalies), gdelt_scores, gold_vol, real_rate_result, dxy_result = \
+                    await asyncio.gather(wm_task, gdelt_task, fred_task, 
+                                       real_rate_task, dxy_task,
+                                       return_exceptions=True)
 
                 if isinstance(wm_scores, Exception) or isinstance(wm_scores, tuple):
                     wm_scores, wm_anomalies = {}, []
@@ -497,15 +562,26 @@ class MacroBridge:
                     gdelt_scores = {}
                 if isinstance(gold_vol, Exception):
                     gold_vol = None
+                
+                # Extract real rate and DXY data with fallback to 0
+                real_rate_delta = 0.0
+                dxy_delta = 0.0
+                
+                if isinstance(real_rate_result, tuple) and len(real_rate_result) == 2:
+                    _, real_rate_delta = real_rate_result
+                    if real_rate_delta is None:
+                        real_rate_delta = 0.0
+                        
+                if isinstance(dxy_result, tuple) and len(dxy_result) == 2:
+                    _, dxy_delta = dxy_result
+                    if dxy_delta is None:
+                        dxy_delta = 0.0
 
                 cii = self._build_cii(wm_scores, gdelt_scores, gold_vol)
 
-                # Use WM anomalies if available, else compute from scores
                 anomalies = wm_anomalies if wm_anomalies else self._compute_anomalies(cii)
-
                 is_fallback = not wm_scores and not gdelt_scores
 
-                # Cache final merged scores under "scores" key for get_brief()
                 self._cache["scores"] = cii
 
                 if not is_fallback:
@@ -518,23 +594,15 @@ class MacroBridge:
                     brief=brief or None,
                     is_fallback=is_fallback
                 )
+                
+                # Set financial market indicators
+                signal.real_rate_delta = real_rate_delta
+                signal.dxy_delta = dxy_delta
 
-                tiers = []
-                if wm_scores:
-                    tiers.append("WorldMonitor")
-                if gdelt_scores:
-                    tiers.append("GDELT")
-                if gold_vol:
-                    tiers.append("FRED")
-                logger.info(
-                    f"MacroBridge signals built — tiers: {', '.join(tiers) or 'baseline'}, "
-                    f"countries: {len(cii)}, fallback: {is_fallback}"
-                )
                 return signal
 
             except Exception as e:
                 logger.error(f"get_signals critical error: {e}", exc_info=True)
-                # Always return usable baseline
                 cii = dict(BASELINE_CII)
                 anoms = self._compute_anomalies(cii)
                 brief = self._generate_brief(cii, anoms)

@@ -61,49 +61,60 @@ class OrnsteinUhlenbeckModel:
         
         logger.info(f"OU initialized: kappa={self.params.kappa:.4f}, theta={self.params.theta:.2f}, sigma={self.params.sigma:.2f}")
     
-    def calibrate(self, prices: np.ndarray) -> OUParameters:
+        def calibrate(self, prices: np.ndarray) -> OUParameters:
         """
-        Calibrate parameters from historical prices using least squares.
+        Calibrate parameters from historical prices using MLE/OLS on AR(1) representation.
         
-        Uses the discrete-time representation:
-        S_{t+1} = S_t + kappa*(theta - S_t)*dt + sigma*sqrt(dt)*Z
+        Discrete-time OU equivalent: S[t] = theta*(1 - e^(-kappa*dt)) + S[t-1]*e^(-kappa*dt) + noise
+        We regress S[t] on S[t-1] to get slope = e^(-kappa*dt) and intercept = theta*(1 - slope).
         
         Args:
-            prices: Array of historical prices
+            prices: Array of historical prices (levels)
             
         Returns:
             Calibrated parameters
         """
-        # Calculate price changes
-        dS = np.diff(prices)
-        S_lag = prices[:-1]
+        # Prepare data: S[t] vs S[t-1]
+        S_t = prices[1:]   # Current prices
+        S_tm1 = prices[:-1]  # Lagged prices
         
-        # Regression: dS = kappa*(theta - S)*dt + error
-        # Rewrite as: dS = kappa*theta*dt - kappa*S*dt + error
-        # Or: dS = a + b*S + error where a = kappa*theta*dt, b = -kappa*dt
+        # OLS regression: S[t] = intercept + slope * S[t-1] + error
+        # Using numpy lstsq for consistency with existing code style
+        X = np.column_stack([np.ones(len(S_tm1)), S_tm1])
         
-        # Add constant for intercept
-        X = np.column_stack([np.ones(len(S_lag)), S_lag])
+        # Solve for [intercept, slope]
+        beta = np.linalg.lstsq(X, S_t, rcond=None)[0]
+        intercept, slope = beta[0], beta[1]
         
-        # OLS regression
-        beta = np.linalg.lstsq(X, dS, rcond=None)[0]
+        # Extract OU parameters from AR(1) coefficients
+        # slope = exp(-kappa * dt)  =>  kappa = -ln(slope) / dt = -ln(slope) * 252
+        if slope <= 0:
+            # If slope is non-positive, process is not mean-reverting (explosive or non-stationary)
+            # Default to slow mean reversion
+            kappa = 0.5
+        else:
+            kappa = -np.log(slope) / self.dt  # self.dt = 1/252, so this equals -np.log(slope) * 252
+            
+        # Ensure kappa is positive (mean reversion requires kappa > 0)
+        if kappa <= 0:
+            kappa = 0.5
+            
+        # theta = intercept / (1 - slope)
+        # As slope -> 1 (random walk), theta -> infinity, so handle near-unit-root carefully
+        if abs(1 - slope) < 1e-6:
+            # Near unit root - use mean of prices as theta
+            theta = np.mean(prices)
+        else:
+            theta = intercept / (1 - slope)
         
-        # Extract parameters
-        a, b = beta[0], beta[1]
-        
-        # kappa = -b / dt
-        kappa = -b / self.dt
-        
-        # theta = a / (kappa * dt)
-        theta = a / (kappa * self.dt) if kappa != 0 else np.mean(prices)
-        
-        # sigma from residuals
-        residuals = dS - (a + b * S_lag)
-        sigma = np.std(residuals) / np.sqrt(self.dt)
+        # sigma = std(residuals) * sqrt(252)
+        residuals = S_t - (intercept + slope * S_tm1)
+        sigma = np.std(residuals) * np.sqrt(252)
         
         # Ensure reasonable bounds
         kappa = np.clip(kappa, 0.1, 10.0)
         sigma = max(sigma, 1.0)
+        theta = max(theta, 0.01)  # Ensure positive theta
         
         self.params = OUParameters(kappa=kappa, theta=theta, sigma=sigma)
         logger.info(f"OU calibrated: kappa={kappa:.4f}, theta={theta:.2f}, sigma={sigma:.2f}")

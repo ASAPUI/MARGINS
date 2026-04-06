@@ -66,27 +66,18 @@ class MertonJumpModel:
             f"sigma={self.params.sigma:.4f}, lambda={self.params.lambda_jump:.2f}"
         )
 
-    def calibrate(self, returns: np.ndarray, threshold: float = 3.0) -> MertonParameters:
-        z_scores = np.abs(scipy_stats.zscore(returns))
-        jump_mask = z_scores > threshold
-
-        n_jumps = np.sum(jump_mask)
-        n_total = len(returns)
-
-        lambda_jump = (n_jumps / n_total) / self.dt
-
+        def calibrate(self, returns: np.ndarray, threshold: float = 3.0) -> MertonParameters:
+        daily_sigma = np.std(returns)
+        jump_mask = np.abs(returns) > 2.5 * daily_sigma
+        jump_returns = returns[jump_mask]
+        lambda_jump = np.sum(jump_mask) / (len(returns)/252)
+        mu_jump = np.mean(jump_returns) if len(jump_returns)>2 else -0.02
+        sigma_jump = np.std(jump_returns) if len(jump_returns)>2 else 0.03
+        
         diffusion_returns = returns[~jump_mask]
         mu = np.mean(diffusion_returns) * 252
         sigma = np.std(diffusion_returns) * np.sqrt(252)
-
-        if n_jumps > 5:
-            jump_returns = returns[jump_mask]
-            mu_jump = np.mean(jump_returns)
-            sigma_jump = np.std(jump_returns)
-        else:
-            mu_jump = -0.05
-            sigma_jump = 0.10
-
+        
         self.params = MertonParameters(
             mu=mu,
             sigma=sigma,
@@ -96,7 +87,6 @@ class MertonJumpModel:
         )
         logger.info(f"Merton calibrated: lambda={lambda_jump:.2f}, mu_jump={mu_jump:.4f}")
         return self.params
-
     def step(
         self,
         S: np.ndarray,

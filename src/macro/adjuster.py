@@ -123,20 +123,35 @@ class ParameterAdjuster:
     
     def _calculate_mu_shift(self) -> float:
         """
-        Drift adjustment based on maximum single country CII.
-        Formula: mu -= 0.001 * max(0, CII_max - 70)
-        (Negative shift during high instability = flight to safety initially,
-        but increased uncertainty reduces drift)
+        Drift adjustment based on:
+        1. Geopolitical factor (max CII)
+        2. Real rates (rising real rates = lower gold drift)
+        3. DXY (stronger dollar = lower gold drift)
+        
+        Formula: mu_shift = -0.001 * max(0, CII_max - 70) 
+                          - 0.3 * real_rate_delta 
+                          - 0.4 * dxy_delta
         """
         cii_max = self.signal.cii_max
-        if cii_max <= 70:
-            return 0.0
-            
-        shift = -0.001 * (cii_max - 70)
-        self._adjustment_log['mu_shift'] = round(shift, 6)
-        self._adjustment_log['cii_max_input'] = round(cii_max, 2)
+        geo_shift = 0.0
+        if cii_max > 70:
+            geo_shift = -0.001 * (cii_max - 70)
+            self._adjustment_log['geo_shift'] = round(geo_shift, 6)
         
-        return shift
+        # Financial market adjustments (coefficients from empirical regression)
+        rate_shift = -0.3 * self.signal.real_rate_delta
+        dxy_shift = -0.4 * self.signal.dxy_delta
+        
+        total_shift = geo_shift + rate_shift + dxy_shift
+        
+        self._adjustment_log['mu_shift'] = round(total_shift, 6)
+        self._adjustment_log['cii_max_input'] = round(cii_max, 2)
+        self._adjustment_log['real_rate_delta'] = round(self.signal.real_rate_delta, 4)
+        self._adjustment_log['dxy_delta'] = round(self.signal.dxy_delta, 4)
+        self._adjustment_log['rate_contribution'] = round(rate_shift, 6)
+        self._adjustment_log['dxy_contribution'] = round(dxy_shift, 6)
+
+        return total_shift
     
     def _calculate_lambda_boost(self, base_lambda: float) -> float:
         """
@@ -251,7 +266,7 @@ class ParameterAdjuster:
         sigma_mult = self._calculate_sigma_multiplier()
         mu_shift = self._calculate_mu_shift()
         
-        # Jump intensity boosted by anomalies
+        # Jump intensity boosted by anomalie
         lambda_adj = self._calculate_lambda_boost(lambda_jump)
         
         # Jump direction: negative mean if extreme instability (crisis drops),
