@@ -257,15 +257,6 @@ Phase 6 implements the **industry-standard walk-forward validation framework** �
 - **Ensemble:** Vol-parity weights (inverse rolling volatility) rebalanced each fold.
 - **Significance:** Diebold-Mariano test (Newey-West adjusted) vs GBM baseline.
 
-### Phase 6 Results — Full Leaderboard (48 Folds)
-
-| Rank | Model | RMSE | MAPE% | DirAcc% | Sharpe | Calmar | MDD% | Return% |
-|---|---|---|---|---|---|---|---|---|
-| 🥇 1 | **Regime** | 47.88 | 3.10 | 50.5% | **1.154** | 4.16 | -16.2% | **+10.03%** |
-| 🥈 2 | GBM | 47.08 | 3.07 | 48.6% | 0.585 | 1.34 | -16.3% | +2.88% |
-| 🥉 3 | Heston | 47.31 | 3.08 | 50.4% | -0.309 | -0.68 | -16.2% | -3.28% |
-| 4 | Merton | 49.66 | 3.24 | 50.3% | 0.389 | 1.11 | **-12.0%** | +1.43% |
-| 5 | OU | 78.04 | 5.12 | 49.7% | 0.013 | 0.03 | -25.0% | -3.29% |
 
 **Vol-Parity Ensemble:** Return +6.71% · Sharpe 0.899 · MDD -14.69%
 
