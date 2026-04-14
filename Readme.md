@@ -372,7 +372,7 @@ pytest tests/test_models.py -v
 
 ## 📄 License
 
-BSL License — not for commercial use.
+BSL License 
 
 ---
 
